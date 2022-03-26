@@ -8,17 +8,17 @@ use cw_storage_plus::{Item, Map};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
     pub balance: Vec<Coin>,
-    pub goods_list: Vec<Goods>,
-    pub order_list: Vec<Order>,
+    pub goods_list: Vec<Box<Goods>>,
+    pub order_list: Vec<Box<Order>>,
     pub owner: Addr,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Goods {
-    pub name: str,
+    pub name: String,
     pub seller: Addr,
     pub price: Coin,
-    pub location: str,
+    pub location: String,
     pub status: GoodsStatus
 }
 
