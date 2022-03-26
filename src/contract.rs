@@ -49,8 +49,8 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Post {name, price, denom, location} => try_post(deps, info, &name, price, &denom, &location),
-        ExecuteMsg::Buy {name, location} => try_buy(deps, info, &name, &location),
+        ExecuteMsg::Post {name, price, denom, area} => try_post(deps, info, &name, price, &denom, &area),
+        ExecuteMsg::Buy {name, area} => try_buy(deps, info, &name, &area),
         ExecuteMsg::Reset {name, price} => try_reset(deps, info, &name, price),
         ExecuteMsg::TakeOrder { id, pub_key} => try_take_order(deps, info, id, pub_key),
         ExecuteMsg::UploadAddress { id, address_enc } => try_upload_address(deps, info, id, address_enc),
@@ -63,19 +63,19 @@ pub fn execute(
     }
 }
 
-pub fn try_post(deps: DepsMut, info: MessageInfo, name: &str, price: u32, denom: &str, location: &str) -> Result<Response, ContractError> {
+pub fn try_post(deps: DepsMut, info: MessageInfo, name: &str, price: u32, denom: &str, area: &str) -> Result<Response, ContractError> {
     let good = Goods {
         name: String::from(name),
         seller: info.sender,
         price: Coin {denom: String::from(denom), amount: Uint128::from(price)},
-        location: String::from(location),
+        area: String::from(area),
         status: GoodsStatus::Available
     };
     GOODS_LIST.save(deps.storage, name, &good)?;
     Ok(Response::new().add_attribute("method", "try_post"))
 }
 
-pub fn try_buy(deps: DepsMut, info: MessageInfo, name: &str, location: &str) -> Result<Response, ContractError> {
+pub fn try_buy(deps: DepsMut, info: MessageInfo, name: &str, area: &str) -> Result<Response, ContractError> {
     let mut good = GOODS_LIST.load(deps.storage, name)?;
     if good.status != Available {
         return Err(ContractError::GoodsNotAvailable {});
@@ -95,7 +95,7 @@ pub fn try_buy(deps: DepsMut, info: MessageInfo, name: &str, location: &str) -> 
         seller: good.clone().seller,
         goods: good.clone(),
         price: good.clone().price,
-        buyer_address: String::from(location),
+        buyer_address: String::from(area),
         shipping_fee: Default::default(),
         shipper: Addr::unchecked("Dummy_Shipper"),
         shipper_key: Default::default(),
@@ -273,7 +273,7 @@ mod tests {
             name: String::from("TV"),
             price: 200,
             denom: String::from("LUNA"),
-            location: String::from("Montreal")
+            area: String::from("Montreal")
         };
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 //        // it worked, let's query the state
@@ -301,14 +301,14 @@ mod tests {
             name: String::from("TV"),
             price: 200,
             denom: String::from("LUNA"),
-            location: String::from("Montreal")
+            area: String::from("Montreal")
         };
 
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 
         let msg2 = ExecuteMsg::Buy {
             name: String::from("TV"),
-            location: String::from("Montreal")
+            area: String::from("Montreal")
         };
 
         let info2 = mock_info("buyer", &coins(2000, "LUNA"));
@@ -334,7 +334,7 @@ mod tests {
             name: String::from("TV"),
             price: 200,
             denom: String::from("LUNA"),
-            location: String::from("Montreal")
+            area: String::from("Montreal")
         };
         let _res = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 
@@ -375,14 +375,14 @@ mod tests {
             name: String::from("TV"),
             price: 200,
             denom: String::from("LUNA"),
-            location: String::from("Montreal")
+            area: String::from("Montreal")
         };
 
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 
         let msg2 = ExecuteMsg::Buy {
             name: String::from("TV"),
-            location: String::from("Montreal")
+            area: String::from("Montreal")
         };
 
         let info2 = mock_info("buyer", &coins(2000, "LUNA"));
