@@ -1,5 +1,6 @@
-use cosmwasm_std::Coin;
+use cosmwasm_std::{Coin, coin, Uint128};
 use crate::ContractError;
+
 
 // Acknowledgement: cw-nameservice = 0.10.0
 pub fn assert_sent_sufficient_coin(
@@ -23,4 +24,17 @@ pub fn assert_sent_sufficient_coin(
         }
     }
     Ok(())
+}
+
+pub fn merge_coin(coin1: Vec<Coin>, coin2: Vec<Coin>) -> Vec<Coin> {
+    let mut merged_coin = vec![];
+    for cc in coin1.iter() {
+        let another_coin = coin2.iter().find(|&x| x.denom == cc.denom);
+        let num = cc.amount + match another_coin {
+            Some(c) => c.amount,
+            None => Uint128::from(0u32)
+        };
+        merged_coin.push(coin(num.u128(), cc.clone().denom));
+    }
+    merged_coin
 }

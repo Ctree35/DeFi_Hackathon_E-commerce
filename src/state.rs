@@ -45,7 +45,8 @@ pub struct Order {
 pub enum GoodsStatus {
     Available,
     Ordered,
-    Sold
+    Sold,
+    Returned
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -54,7 +55,8 @@ pub enum OrderStatus {
     WaitingAddressUpload,
     Shipping,
     Confirmed,
-    Disputing,
+    DisputingBroken,
+    DisputingUnsatisfied,
     Disputed
 }
 

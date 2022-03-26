@@ -3,18 +3,18 @@ use std::iter::Map;
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Coin, Uint128, from_binary, AllBalanceResponse, Addr, CosmosMsg, BankMsg};
 use cosmwasm_std::OverflowOperation::Add;
-use cosmwasm_std::coin;
+use cosmwasm_std::{coin, coins};
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, GoodsResponse, InstantiateMsg, OrdersResponse, QueryMsg, ShippingFeesResponse};
 use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST, ORDER_LIST, SHIPPING_FEE_MATRIX, Order, OrderStatus};
-use crate::helper::assert_sent_sufficient_coin;
+use crate::helper::{assert_sent_sufficient_coin, merge_coin};
 // use serde::de::Unexpected::Map;
-use crate::state::GoodsStatus::{Available, Ordered, Sold};
+use crate::state::GoodsStatus::{Available, Ordered, Returned, Sold};
 use cosmwasm_std::Order::Ascending;
 use crate::ContractError::Unauthorized;
-use crate::state::OrderStatus::{Confirmed, Setup, Shipping, WaitingAddressUpload};
+use crate::state::OrderStatus::{Confirmed, Disputed, DisputingBroken, DisputingUnsatisfied, Setup, Shipping, WaitingAddressUpload};
 
 
 // version info for migration info
@@ -55,10 +55,10 @@ pub fn execute(
         ExecuteMsg::TakeOrder { id, pub_key} => try_take_order(deps, info, id, pub_key),
         ExecuteMsg::UploadAddress { id, address_enc } => try_upload_address(deps, info, id, address_enc),
         ExecuteMsg::Confirm { id } => try_confirm(deps, info, id),
-//        ExecuteMsg::DisputeBroken { id } => try_dispute_broken(deps, info, id),
-//        ExecuteMsg::DisputeUnsatisfied { id } => try_dispute_unsatisfied(deps, info, id),
-//        ExecuteMsg::DisputeConfirm { id} => try_dispute_confirm(deps, info, id)
-        _ => unimplemented!()
+        ExecuteMsg::DisputeBroken { id } => try_dispute_broken(deps, info, id),
+        ExecuteMsg::DisputeUnsatisfied { id } => try_dispute_unsatisfied(deps, info, id),
+        ExecuteMsg::DisputeConfirm { id} => try_dispute_confirm(deps, info, id)
+        // _ => unimplemented!()
 
     }
 }
@@ -208,6 +208,85 @@ pub fn try_confirm(deps: DepsMut, info: MessageInfo, id: u32) -> Result<Response
         .add_attribute("method", "try_confirm")
         .add_message(CosmosMsg::Bank(BankMsg::Send { to_address: order.seller.into_string(), amount: vec![order.price] }))
         .add_message(CosmosMsg::Bank(BankMsg::Send { to_address: order.shipper.into_string(), amount: vec![order.shipping_fee] })))
+}
+
+pub fn try_dispute_broken(deps: DepsMut, info: MessageInfo, id: u32) -> Result<Response, ContractError> {
+    let mut order = ORDER_LIST.load(deps.storage, &id.to_string())?;
+    if order.status != Shipping {
+        return Err(ContractError::OrderNotAvailable {});
+    }
+    if order.buyer != info.sender {
+        return Err(ContractError::Unauthorized {});
+    }
+    order.status = DisputingBroken;
+    let update_order = |d: Option<Order>| -> StdResult<Order> {
+        match d {
+            Some(_) => Ok(order.clone()),
+            None => unimplemented!(),
+        }
+    };
+    ORDER_LIST.update(deps.storage, &id.to_string(), update_order)?;
+    Ok(Response::new().add_attribute("method", "try_dispute_broken"))
+}
+
+pub fn try_dispute_unsatisfied(deps: DepsMut, info: MessageInfo, id: u32) -> Result<Response, ContractError> {
+    let mut order = ORDER_LIST.load(deps.storage, &id.to_string())?;
+    if order.status != Shipping {
+        return Err(ContractError::OrderNotAvailable {});
+    }
+    if order.buyer != info.sender {
+        return Err(ContractError::Unauthorized {});
+    }
+    order.status = DisputingUnsatisfied;
+    let update_order = |d: Option<Order>| -> StdResult<Order> {
+        match d {
+            Some(_) => Ok(order.clone()),
+            None => unimplemented!(),
+        }
+    };
+    ORDER_LIST.update(deps.storage, &id.to_string(), update_order)?;
+    Ok(Response::new().add_attribute("method", "try_dispute_unsatisfied"))
+}
+
+pub fn try_dispute_confirm(deps: DepsMut, info: MessageInfo, id: u32) -> Result<Response, ContractError> {
+    let mut order = ORDER_LIST.load(deps.storage, &id.to_string())?;
+    if order.status != DisputingBroken && order.status != DisputingUnsatisfied {
+        return Err(ContractError::OrderNotAvailable {});
+    }
+    if order.seller != info.sender {
+        return Err(ContractError::Unauthorized {});
+    }
+    let mut res = Response::new().add_attribute("method", "try_dispute_confirm");
+    res = match order.status {
+        DisputingBroken => {
+            res.add_message(CosmosMsg::Bank(BankMsg::Send { to_address: order.clone().buyer.into_string(), amount: merge_coin(vec![order.clone().price], coins(order.clone().shipping_fee.amount.checked_mul(Uint128::from(2u32)).unwrap().u128(), order.clone().shipping_fee.denom)) }))
+                .add_message(CosmosMsg::Bank(BankMsg::Send { to_address: order.clone().seller.into_string(), amount: vec![order.clone().price] }))
+        },
+        DisputingUnsatisfied => {
+            res.add_message(CosmosMsg::Bank(BankMsg::Send { to_address: order.clone().shipper.into_string(), amount: coins(order.clone().shipping_fee.amount.checked_mul(Uint128::from(2u32)).unwrap().u128(), order.clone().shipping_fee.denom) }))
+                .add_message(CosmosMsg::Bank(BankMsg::Send { to_address: order.clone().buyer.into_string(), amount: vec![order.clone().price] }))
+        },
+        _ => unimplemented!()
+    };
+    order.status = Disputed;
+    let mut good = GOODS_LIST.load(deps.storage, &order.goods.name)?;
+    good.status = Returned;
+    order.goods = good.clone();
+    let update_good = |d: Option<Goods>| -> StdResult<Goods> {
+        match d {
+            Some(_) => Ok(good.clone()),
+            None => unimplemented!(),
+        }
+    };
+    let update_order = |d: Option<Order>| -> StdResult<Order> {
+        match d {
+            Some(_) => Ok(order.clone()),
+            None => unimplemented!(),
+        }
+    };
+    ORDER_LIST.update(deps.storage, &id.to_string(), update_order)?;
+    GOODS_LIST.update(deps.storage, &order.goods.name, update_good)?;
+    Ok(res)
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -513,5 +592,67 @@ mod tests {
         };
         let info6 = mock_info("buyer", &coins(0, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info6, msg6).unwrap();
+    }
+
+    #[test]
+    fn test_dispute() {
+        let mut deps = mock_dependencies(&[]);
+
+        let msg = InstantiateMsg {};
+        let info = mock_info("seller", &coins(1000, "earth"));
+
+        // we can just call .unwrap() to assert this was a success
+        let res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        let msg = ExecuteMsg::Post {
+            name: String::from("TV"),
+            price: 200,
+            denom: String::from("LUNA"),
+            area: String::from("Montreal")
+        };
+
+        let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+
+        let msg2 = ExecuteMsg::Buy {
+            name: String::from("TV"),
+            area: String::from("Montreal")
+        };
+
+        let info2 = mock_info("buyer", &coins(2000, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info2, msg2).unwrap();
+
+        let msg3 = ExecuteMsg::TakeOrder {
+            id: 0,
+            pub_key: String::from("rsa1")
+        };
+        let info3 = mock_info("shipper", &coins(20, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info3, msg3).unwrap();
+
+        let msg4 = ExecuteMsg::UploadAddress {
+            id: 0,
+            address_enc: String::from("my address")
+        };
+        let info4 = mock_info("buyer", &coins(0, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info4, msg4).unwrap();
+
+        let msg5 = ExecuteMsg::UploadAddress {
+            id: 0,
+            address_enc: String::from("my address")
+        };
+        let info5 = mock_info("seller", &coins(0, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info5, msg5).unwrap();
+
+        let msg6 = ExecuteMsg::DisputeUnsatisfied {
+            id: 0,
+        };
+        let info6 = mock_info("buyer", &coins(0, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info6, msg6).unwrap();
+
+        let msg7 = ExecuteMsg::DisputeConfirm {
+            id: 0,
+        };
+        let info7 = mock_info("seller", &coins(0, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info7, msg7).unwrap();
     }
 }
