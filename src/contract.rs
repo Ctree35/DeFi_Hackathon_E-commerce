@@ -7,7 +7,7 @@ use cosmwasm_std::{coin, coins};
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::msg::{AddressesResponse, ExecuteMsg, GoodsResponse, InstantiateMsg, OrdersResponse, QueryMsg, ShippingFeesResponse};
+use crate::msg::{AddressesResponse, ExecuteMsg, GoodsResponse, InstantiateMsg, OrderDetailResponse, OrdersResponse, QueryMsg, ShippingFeesResponse};
 use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST, ORDER_LIST, SHIPPING_FEE_MATRIX, Order, OrderStatus};
 use crate::helper::{assert_sent_sufficient_coin, merge_coin};
 // use serde::de::Unexpected::Map;
@@ -297,7 +297,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::GetGoods {} => to_binary(&query_goods(deps)?),
         QueryMsg::GetOrders {} => to_binary(&query_orders(deps)?),
         QueryMsg::GetShippingFees {} => to_binary(&query_shipping_fees(deps)?),
-
+        QueryMsg::GetOrderDetail {id} => to_binary(&query_order_detail(deps, id)?),
         QueryMsg::GetAddresses {id} => to_binary(&query_address(deps, id)?),
     }
 }
@@ -327,6 +327,18 @@ pub fn query_shipping_fees(deps: Deps) -> StdResult<ShippingFeesResponse> {
     Ok(ShippingFeesResponse{shipping_fees: {shipping_fees}})
 }
 
+pub fn query_order_detail(deps: Deps, id: u32) -> StdResult<OrderDetailResponse> {
+    let order_list: StdResult<Vec<_>> = ORDER_LIST.range(deps.storage, None, None, Ascending).collect();
+    let order_list = order_list.unwrap();
+    let order = order_list.iter().find(|&x| String::from_utf8(x.clone().0).unwrap() == id.to_string());
+    let order = match order {
+        Some((_, o)) => o.clone(),
+        None => unimplemented!()
+    };
+
+    Ok(OrderDetailResponse{order: {order}})
+}
+
 pub fn query_address(deps: Deps, id: u32) -> StdResult<AddressesResponse> {
     let order_list: StdResult<Vec<_>> = ORDER_LIST.range(deps.storage, None, None, Ascending).collect();
     let order_list = order_list.unwrap();
@@ -339,9 +351,6 @@ pub fn query_address(deps: Deps, id: u32) -> StdResult<AddressesResponse> {
         Some((_, o)) => o.clone().seller,
         None => unimplemented!()
     };
-
-    //let seller = order.seller;
-    //let buyer = order.buyer;
 
     Ok(AddressesResponse{buyer: buyer.into_string(), seller: seller.into_string()})
 }
@@ -415,6 +424,10 @@ mod tests {
 
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetAddresses {id: 0u32}).unwrap();
         let value: AddressesResponse = from_binary(&res).unwrap();
+        println!("{:?}", value);
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetOrderDetail {id: 0u32}).unwrap();
+        let value: OrderDetailResponse = from_binary(&res).unwrap();
         println!("{:?}", value);
     }
 
