@@ -10,8 +10,8 @@ pub struct InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
-    Post {name: String, price: u32, denom: String, location: String},
-    Buy {name: String, location: String},
+    Post {name: String, price: u32, denom: String, area: String},
+    Buy {name: String, area: String},
     Reset { name: String, price: u32 },
     TakeOrder {id: u32, pub_key: u32},
     UploadAddress {id: u32, address_enc: u32},

@@ -17,7 +17,7 @@ pub struct Goods {
     pub name: String,
     pub seller: Addr,
     pub price: Coin,
-    pub location: String,
+    pub area: String,
     pub status: GoodsStatus
 }
 
