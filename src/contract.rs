@@ -47,9 +47,11 @@ pub fn execute(
         ExecuteMsg::Buy {name, location} => try_buy(deps, info, name, location),
         ExecuteMsg::Reset { price} => try_reset(deps, info, count),
         ExecuteMsg::TakeOrder { id, pub_key} => try_take_order(deps, info, id, pub_key),
+        ExecuteMsg::UploadAddress { id, address_enc } => try_upload_address(deps, info, id, address_enc),
         ExecuteMsg::Confirm { id } => try_confirm(deps, info, id),
         ExecuteMsg::DisputeBroken { id } => try_dispute_broken(deps, info, id),
-        ExecuteMsg::DisputeUnsatisfied { id } => try_dispute_unsatisfied(deps, info, id)
+        ExecuteMsg::DisputeUnsatisfied { id } => try_dispute_unsatisfied(deps, info, id),
+        ExecuteMsg::DisputeConfirm { id} => try_dispute_confirm(deps, info, id)
     }
 }
 
@@ -87,7 +89,8 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::GetGoods { } => to_binary(&query_goods(deps)?),
         QueryMsg::GetOrders { } => to_binary(&query_orders(deps)?),
         QueryMsg::GetDistance { } => to_binary(&query_distance(deps)?),
-        QueryMsg::GetOrderDetail {id} => to_binary(&query_order_detail(deps)?),
+        QueryMsg::GetOrderDetail {id} => to_binary(&query_order_detail(deps, id)?),
+        QueryMsg::GetAddresses {id} => to_binary(&query_addresses(deps, id)?),
     }
 }
 

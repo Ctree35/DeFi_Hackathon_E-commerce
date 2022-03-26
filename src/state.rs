@@ -49,8 +49,10 @@ pub enum GoodsStatus {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub enum OrderStatus {
     Setup,
+    WaitingAddressUpload,
     Shipping,
     Confirmed,
+    Disputing,
     Disputed
 }
 
