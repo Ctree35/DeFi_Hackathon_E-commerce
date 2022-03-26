@@ -240,6 +240,14 @@ mod tests {
             location: String::from("Montreal")
         };
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+//        // it worked, let's query the state
+//        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
+//        let value: CountResponse = from_binary(&res).unwrap();
+//        assert_eq!(17, value.count);
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetGoods {}).unwrap();
+        let value: GoodsResponse = from_binary(&res).unwrap();
+        println!("{:?}", value);
     }
 
     #[test]
@@ -270,8 +278,8 @@ mod tests {
         let info2 = mock_info("buyer", &coins(2000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info2, msg2).unwrap();
 
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetGoods {}).unwrap();
-        let value: GoodsResponse = from_binary(&res).unwrap();
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetOrders {}).unwrap();
+        let value: OrdersResponse = from_binary(&res).unwrap();
         println!("{:?}", value);
     }
 
