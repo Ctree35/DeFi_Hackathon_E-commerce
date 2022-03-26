@@ -31,9 +31,9 @@ pub struct Order {
     pub buyer_address: String,
     pub shipping_fee: Coin,
     pub shipper: Addr,
-    pub shipper_key: u32,
-    pub buyer_addr_enc: u32,
-    pub seller_addr_enc: u32,
+    pub shipper_key: String,
+    pub buyer_addr_enc: String,
+    pub seller_addr_enc: String,
     pub status: OrderStatus
 }
 
