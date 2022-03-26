@@ -1,7 +1,7 @@
 use std::iter::Map;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Coin, Uint128, from_binary, AllBalanceResponse, Addr};
+use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Coin, Uint128, from_binary, AllBalanceResponse, Addr, CosmosMsg, BankMsg};
 use cosmwasm_std::OverflowOperation::Add;
 use cosmwasm_std::coin;
 use cw2::set_contract_version;
@@ -11,10 +11,10 @@ use crate::msg::{ExecuteMsg, GoodsResponse, InstantiateMsg, OrdersResponse, Quer
 use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST, ORDER_LIST, SHIPPING_FEE_MATRIX, Order, OrderStatus};
 use crate::helper::assert_sent_sufficient_coin;
 // use serde::de::Unexpected::Map;
-use crate::state::GoodsStatus::{Available, Ordered};
+use crate::state::GoodsStatus::{Available, Ordered, Sold};
 use cosmwasm_std::Order::Ascending;
 use crate::ContractError::Unauthorized;
-use crate::state::OrderStatus::{Setup, Shipping, WaitingAddressUpload};
+use crate::state::OrderStatus::{Confirmed, Setup, Shipping, WaitingAddressUpload};
 
 
 // version info for migration info
@@ -26,7 +26,7 @@ pub fn instantiate(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    msg: InstantiateMsg,
+    _msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     let state = State {
         balance: deps.querier.query_all_balances(env.contract.address).unwrap(),
@@ -54,7 +54,7 @@ pub fn execute(
         ExecuteMsg::Reset {name, price} => try_reset(deps, info, &name, price),
         ExecuteMsg::TakeOrder { id, pub_key} => try_take_order(deps, info, id, pub_key),
         ExecuteMsg::UploadAddress { id, address_enc } => try_upload_address(deps, info, id, address_enc),
-//        ExecuteMsg::Confirm { id } => try_confirm(deps, info, id),
+        ExecuteMsg::Confirm { id } => try_confirm(deps, info, id),
 //        ExecuteMsg::DisputeBroken { id } => try_dispute_broken(deps, info, id),
 //        ExecuteMsg::DisputeUnsatisfied { id } => try_dispute_unsatisfied(deps, info, id),
 //        ExecuteMsg::DisputeConfirm { id} => try_dispute_confirm(deps, info, id)
@@ -176,6 +176,38 @@ pub fn try_upload_address(deps: DepsMut, info: MessageInfo, id: u32, address_enc
     };
     ORDER_LIST.update(deps.storage, &id.to_string(), update_order)?;
     Ok(Response::new().add_attribute("method", "try_upload_address"))
+}
+
+pub fn try_confirm(deps: DepsMut, info: MessageInfo, id: u32) -> Result<Response, ContractError> {
+    let mut order = ORDER_LIST.load(deps.storage, &id.to_string())?;
+    if order.status != Shipping {
+        return Err(ContractError::OrderNotAvailable {});
+    }
+    if order.buyer != info.sender {
+        return Err(ContractError::Unauthorized {});
+    }
+    order.status = Confirmed;
+    let mut good = GOODS_LIST.load(deps.storage, &order.goods.name)?;
+    good.status = Sold;
+    order.goods = good.clone();
+    let update_good = |d: Option<Goods>| -> StdResult<Goods> {
+        match d {
+            Some(_) => Ok(good.clone()),
+            None => unimplemented!(),
+        }
+    };
+    let update_order = |d: Option<Order>| -> StdResult<Order> {
+        match d {
+            Some(_) => Ok(order.clone()),
+            None => unimplemented!(),
+        }
+    };
+    ORDER_LIST.update(deps.storage, &id.to_string(), update_order)?;
+    GOODS_LIST.update(deps.storage, &order.goods.name, update_good)?;
+    Ok(Response::new()
+        .add_attribute("method", "try_confirm")
+        .add_message(CosmosMsg::Bank(BankMsg::Send { to_address: order.seller.into_string(), amount: vec![order.price] }))
+        .add_message(CosmosMsg::Bank(BankMsg::Send { to_address: order.shipper.into_string(), amount: vec![order.shipping_fee] })))
 }
 //pub fn try_increment(deps: DepsMut) -> Result<Response, ContractError> {
 //    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
@@ -444,5 +476,61 @@ mod tests {
         };
         let info5 = mock_info("seller", &coins(0, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info5, msg5).unwrap();
+    }
+
+    #[test]
+    fn test_confirm() {
+        let mut deps = mock_dependencies(&[]);
+
+        let msg = InstantiateMsg {};
+        let info = mock_info("seller", &coins(1000, "earth"));
+
+        // we can just call .unwrap() to assert this was a success
+        let res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        let msg = ExecuteMsg::Post {
+            name: String::from("TV"),
+            price: 200,
+            denom: String::from("LUNA"),
+            area: String::from("Montreal")
+        };
+
+        let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+
+        let msg2 = ExecuteMsg::Buy {
+            name: String::from("TV"),
+            area: String::from("Montreal")
+        };
+
+        let info2 = mock_info("buyer", &coins(2000, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info2, msg2).unwrap();
+
+        let msg3 = ExecuteMsg::TakeOrder {
+            id: 0,
+            pub_key: String::from("rsa1")
+        };
+        let info3 = mock_info("shipper", &coins(20, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info3, msg3).unwrap();
+
+        let msg4 = ExecuteMsg::UploadAddress {
+            id: 0,
+            address_enc: String::from("my address")
+        };
+        let info4 = mock_info("buyer", &coins(0, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info4, msg4).unwrap();
+
+        let msg5 = ExecuteMsg::UploadAddress {
+            id: 0,
+            address_enc: String::from("my address")
+        };
+        let info5 = mock_info("seller", &coins(0, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info5, msg5).unwrap();
+
+        let msg6 = ExecuteMsg::Confirm {
+            id: 0,
+        };
+        let info6 = mock_info("buyer", &coins(0, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info6, msg6).unwrap();
     }
 }

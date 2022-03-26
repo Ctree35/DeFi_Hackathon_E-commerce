@@ -45,7 +45,6 @@ pub struct Order {
 pub enum GoodsStatus {
     Available,
     Ordered,
-    Shipping,
     Sold
 }
 
