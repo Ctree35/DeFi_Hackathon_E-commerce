@@ -342,6 +342,7 @@ mod tests {
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetGoods {}).unwrap();
         let value: GoodsResponse = from_binary(&res).unwrap();
         println!("{:?}", value);
+        assert_eq!(Uint128::from(200u32), value.goods[0].price.amount);
 
         let msg2 = ExecuteMsg::Reset {
             name: String::from("TV"),
@@ -359,6 +360,7 @@ mod tests {
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetGoods {}).unwrap();
         let value: GoodsResponse = from_binary(&res).unwrap();
         println!("{:?}", value);
+        assert_eq!(Uint128::from(20u32), value.goods[0].price.amount);
     }
 
     #[test]
