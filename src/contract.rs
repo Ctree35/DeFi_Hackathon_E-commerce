@@ -411,14 +411,14 @@ mod tests {
             name: String::from("TV"),
             price: 200,
             denom: String::from("LUNA"),
-            location: String::from("Montreal")
+            area: String::from("Montreal")
         };
 
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 
         let msg2 = ExecuteMsg::Buy {
             name: String::from("TV"),
-            location: String::from("Montreal")
+            area: String::from("Montreal")
         };
 
         let info2 = mock_info("buyer", &coins(2000, "LUNA"));
