@@ -41,14 +41,15 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::Post {name, price, denom, location} => try_post(deps, info, &name, price, &denom, &location),
-        ExecuteMsg::Buy {name, location} => try_buy(deps, info, name, location),
-        ExecuteMsg::Reset { price} => try_reset(deps, info, price),
-        ExecuteMsg::TakeOrder { id, pub_key} => try_take_order(deps, info, id, pub_key),
-        ExecuteMsg::UploadAddress { id, address_enc } => try_upload_address(deps, info, id, address_enc),
-        ExecuteMsg::Confirm { id } => try_confirm(deps, info, id),
-        ExecuteMsg::DisputeBroken { id } => try_dispute_broken(deps, info, id),
-        ExecuteMsg::DisputeUnsatisfied { id } => try_dispute_unsatisfied(deps, info, id),
-        ExecuteMsg::DisputeConfirm { id} => try_dispute_confirm(deps, info, id)
+        _ => unimplemented!()
+//        ExecuteMsg::Buy {name, location} => try_buy(deps, info, name, location),
+//        ExecuteMsg::Reset { price} => try_reset(deps, info, price),
+//        ExecuteMsg::TakeOrder { id, pub_key} => try_take_order(deps, info, id, pub_key),
+//        ExecuteMsg::UploadAddress { id, address_enc } => try_upload_address(deps, info, id, address_enc),
+//        ExecuteMsg::Confirm { id } => try_confirm(deps, info, id),
+//        ExecuteMsg::DisputeBroken { id } => try_dispute_broken(deps, info, id),
+//        ExecuteMsg::DisputeUnsatisfied { id } => try_dispute_unsatisfied(deps, info, id),
+//        ExecuteMsg::DisputeConfirm { id} => try_dispute_confirm(deps, info, id)
     }
 }
 
@@ -95,14 +96,15 @@ pub fn try_post(deps: DepsMut, info: MessageInfo, name: &str, price: u32, denom:
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
-    match msg {
-//        QueryMsg::GetCount {} => to_binary(&query_count(deps)?),
-        QueryMsg::GetGoods { } => to_binary(&query_goods(deps)?),
-        QueryMsg::GetOrders { } => to_binary(&query_orders(deps)?),
-        QueryMsg::GetDistance { } => to_binary(&query_distance(deps)?),
-        QueryMsg::GetOrderDetail {id} => to_binary(&query_order_detail(deps, id)?),
-        QueryMsg::GetAddresses {id} => to_binary(&query_addresses(deps, id)?),
-    }
+//    match msg {
+////        QueryMsg::GetCount {} => to_binary(&query_count(deps)?),
+//        QueryMsg::GetGoods { } => to_binary(&query_goods(deps)?),
+//        QueryMsg::GetOrders { } => to_binary(&query_orders(deps)?),
+//        QueryMsg::GetDistance { } => to_binary(&query_distance(deps)?),
+//        QueryMsg::GetOrderDetail {id} => to_binary(&query_order_detail(deps, id)?),
+//        QueryMsg::GetAddresses {id} => to_binary(&query_addresses(deps, id)?),
+//    }
+    unimplemented!()
 }
 
 //pub fn query_count(deps: Deps) -> StdResult<CountResponse> {
@@ -124,7 +126,7 @@ mod tests {
         let info = mock_info("creator", &coins(1000, "earth"));
 
         // we can just call .unwrap() to assert this was a success
-        let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
+        let res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
         assert_eq!(0, res.messages.len());
 
         let msg = ExecuteMsg::Post {
