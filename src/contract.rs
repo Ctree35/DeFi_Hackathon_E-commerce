@@ -1,13 +1,13 @@
 use std::iter::Map;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Coin, Uint128, from_binary, AllBalanceResponse, Addr, CosmosMsg, BankMsg};
+use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Coin, Uint128, from_binary, AllBalanceResponse, Addr, CosmosMsg, BankMsg, Pair};
 use cosmwasm_std::OverflowOperation::Add;
 use cosmwasm_std::coin;
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, GoodsResponse, InstantiateMsg, OrdersResponse, QueryMsg, ShippingFeesResponse};
+use crate::msg::{AddressesResponse, ExecuteMsg, GoodsResponse, InstantiateMsg, OrdersResponse, QueryMsg, ShippingFeesResponse};
 use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST, ORDER_LIST, SHIPPING_FEE_MATRIX, Order, OrderStatus};
 use crate::helper::assert_sent_sufficient_coin;
 // use serde::de::Unexpected::Map;
@@ -212,18 +212,14 @@ pub fn try_confirm(deps: DepsMut, info: MessageInfo, id: u32) -> Result<Response
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
-//    match msg {
-////        QueryMsg::GetCount {} => to_binary(&query_count(deps)?),
-//        QueryMsg::GetGoods { } => to_binary(&query_goods(deps)?),
-//        QueryMsg::GetOrders { } => to_binary(&query_orders(deps)?),
-//        QueryMsg::GetDistance { } => to_binary(&query_distance(deps)?),
 //        QueryMsg::GetOrderDetail {id} => to_binary(&query_order_detail(deps, id)?),
 //        QueryMsg::GetAddresses {id} => to_binary(&query_addresses(deps, id)?),
-//    }
     match msg {
         QueryMsg::GetGoods {} => to_binary(&query_goods(deps)?),
         QueryMsg::GetOrders {} => to_binary(&query_orders(deps)?),
         QueryMsg::GetShippingFees {} => to_binary(&query_shipping_fees(deps)?),
+
+        QueryMsg::GetAddresses {id} => to_binary(&query_address(deps, id)?),
     }
 }
 
@@ -250,6 +246,25 @@ pub fn query_shipping_fees(deps: Deps) -> StdResult<ShippingFeesResponse> {
     let shipping_fees = shipping_fee_matrix.iter().map(|x| x.1.clone()).collect();
 
     Ok(ShippingFeesResponse{shipping_fees: {shipping_fees}})
+}
+
+pub fn query_address(deps: Deps, id: u32) -> StdResult<AddressesResponse> {
+    let order_list: StdResult<Vec<_>> = ORDER_LIST.range(deps.storage, None, None, Ascending).collect();
+    let order_list = order_list.unwrap();
+    let order = order_list.iter().find(|&x| String::from_utf8(x.clone().0).unwrap() == id.to_string());
+    let buyer = match order {
+        Some((_, o)) => o.clone().buyer,
+        None => unimplemented!()
+    };
+    let seller = match order {
+        Some((_, o)) => o.clone().seller,
+        None => unimplemented!()
+    };
+
+    //let seller = order.seller;
+    //let buyer = order.buyer;
+
+    Ok(AddressesResponse{buyer: buyer.into_string(), seller: seller.into_string()})
 }
 
 #[cfg(test)]
@@ -317,6 +332,10 @@ mod tests {
 
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetOrders {}).unwrap();
         let value: OrdersResponse = from_binary(&res).unwrap();
+        println!("{:?}", value);
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetAddresses {id: 0u32}).unwrap();
+        let value: AddressesResponse = from_binary(&res).unwrap();
         println!("{:?}", value);
     }
 

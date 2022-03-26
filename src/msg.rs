@@ -28,7 +28,7 @@ pub enum QueryMsg {
     GetOrders {},
     GetShippingFees {},
     // GetOrderDetail {id: u32},
-    // GetAddresses {id: u32}
+    GetAddresses {id: u32},
 }
 
 // We define a custom struct for each query response
@@ -54,6 +54,6 @@ pub struct OrderDetailResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AddressesResponse {
-    pub buyer: u32,
-    pub seller: u32
+    pub buyer: String,
+    pub seller: String,
 }
