@@ -9,9 +9,10 @@ use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, GoodsResponse, InstantiateMsg, OrdersResponse, QueryMsg, ShippingFeesResponse};
 use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST, ORDER_LIST, SHIPPING_FEE_MATRIX, Order, OrderStatus};
 use crate::helper::assert_sent_sufficient_coin;
-use serde::de::Unexpected::Map;
+// use serde::de::Unexpected::Map;
 use crate::state::GoodsStatus::Ordered;
 use cosmwasm_std::Order::Ascending;
+use crate::ContractError::Unauthorized;
 
 
 // version info for migration info
@@ -48,7 +49,7 @@ pub fn execute(
     match msg {
         ExecuteMsg::Post {name, price, denom, location} => try_post(deps, info, &name, price, &denom, &location),
         ExecuteMsg::Buy {name, location} => try_buy(deps, info, &name, &location),
-//        ExecuteMsg::Reset { price} => try_reset(deps, info, price),
+        ExecuteMsg::Reset {name, price} => try_reset(deps, info, &name, price),
 //        ExecuteMsg::TakeOrder { id, pub_key} => try_take_order(deps, info, id, pub_key),
 //        ExecuteMsg::UploadAddress { id, address_enc } => try_upload_address(deps, info, id, address_enc),
 //        ExecuteMsg::Confirm { id } => try_confirm(deps, info, id),
@@ -106,6 +107,22 @@ pub fn try_buy(deps: DepsMut, info: MessageInfo, name: &str, location: &str) -> 
 
     Ok(Response::new().add_attribute("method", "try_buy"))
 }
+
+pub fn try_reset(deps: DepsMut, info: MessageInfo, name: &str, price: u32) -> Result<Response, ContractError> {
+    let mut good = GOODS_LIST.load(deps.storage, name)?;
+    if good.seller != info.sender {
+        return Err(ContractError::Unauthorized {});
+    }
+    good.price.amount = Uint128::from(price);
+    let update_good = |d: Option<Goods>| -> StdResult<Goods> {
+        match d {
+            Some(_) => Ok(good.clone()),
+            None => unimplemented!(),
+        }
+    };
+    GOODS_LIST.update(deps.storage, name, update_good)?;
+    Ok(Response::new().add_attribute("method", "try_reset"))
+}
 //pub fn try_increment(deps: DepsMut) -> Result<Response, ContractError> {
 //    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
 //        state.count += 1;
@@ -157,7 +174,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 
 pub fn query_goods(deps: Deps) -> StdResult<GoodsResponse>{
     // let state = STATE.load(deps.storage)?;
-    let good_list: StdResult<Vec<_>> = GOODS_LIST.range(deps.storage, None, None, Order::Ascending).collect();
+    let good_list: StdResult<Vec<_>> = GOODS_LIST.range(deps.storage, None, None, Ascending).collect();
     let good_list = good_list.unwrap();
     let goods = good_list.iter().map(|x| x.1.clone()).collect();
 
@@ -165,7 +182,7 @@ pub fn query_goods(deps: Deps) -> StdResult<GoodsResponse>{
 }
 
 pub fn query_orders(deps: Deps) -> StdResult<OrdersResponse> {
-    let order_list: StdResult<Vec<_>> = ORDER_LIST.range(deps.storage, None, None, Order::Ascending).collect();
+    let order_list: StdResult<Vec<_>> = ORDER_LIST.range(deps.storage, None, None, Ascending).collect();
     let order_list = order_list.unwrap();
     let orders = order_list.iter().map(|x| x.1.clone()).collect();
 
@@ -173,7 +190,7 @@ pub fn query_orders(deps: Deps) -> StdResult<OrdersResponse> {
 }
 
 pub fn query_shipping_fees(deps: Deps) -> StdResult<ShippingFeesResponse> {
-    let shipping_fee_matrix: StdResult<Vec<_>> = SHIPPING_FEE_MATRIX.range(deps.storage, None, None, Order::Ascending).collect();
+    let shipping_fee_matrix: StdResult<Vec<_>> = SHIPPING_FEE_MATRIX.range(deps.storage, None, None, Ascending).collect();
     let shipping_fee_matrix = shipping_fee_matrix.unwrap();
     let shipping_fees = shipping_fee_matrix.iter().map(|x| x.1.clone()).collect();
 
@@ -182,6 +199,7 @@ pub fn query_shipping_fees(deps: Deps) -> StdResult<ShippingFeesResponse> {
 
 #[cfg(test)]
 mod tests {
+    // use core::panicking::panic;
     use super::*;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
     use cosmwasm_std::{coins, from_binary};
@@ -204,10 +222,6 @@ mod tests {
             location: String::from("Montreal")
         };
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
-//        // it worked, let's query the state
-//        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-//        let value: CountResponse = from_binary(&res).unwrap();
-//        assert_eq!(17, value.count);
     }
 
     #[test]
@@ -241,10 +255,38 @@ mod tests {
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetGoods {}).unwrap();
         let value: GoodsResponse = from_binary(&res).unwrap();
         println!("{:?}", value);
+    }
 
-//        // it worked, let's query the state
-//        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-//        let value: CountResponse = from_binary(&res).unwrap();
-//        assert_eq!(17, value.count);
+    #[test]
+    fn test_reset() {
+        let mut deps = mock_dependencies(&[]);
+
+        let msg = InstantiateMsg {};
+        let info = mock_info("creator", &coins(1000, "earth"));
+
+        // we can just call .unwrap() to assert this was a success
+        let res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        let msg = ExecuteMsg::Post {
+            name: String::from("TV"),
+            price: 200,
+            denom: String::from("LUNA"),
+            location: String::from("Montreal")
+        };
+        let _res = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+        let msg2 = ExecuteMsg::Reset {
+            name: String::from("TV"),
+            price: 20
+        };
+        let info2 = mock_info("creator_fake", &coins(1000, "earth"));
+
+        let res = execute(deps.as_mut(), mock_env(), info2, msg2.clone());
+        match res {
+            Err(ContractError::Unauthorized {}) => {},
+            _ => panic!("Not buyer, not authorized!")
+        }
+        let _res = execute(deps.as_mut(), mock_env(), info, msg2);
+
     }
 }

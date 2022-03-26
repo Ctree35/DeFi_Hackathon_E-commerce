@@ -12,7 +12,7 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {
     Post {name: String, price: u32, denom: String, location: String},
     Buy {name: String, location: String},
-    Reset { price: u32 },
+    Reset { name: String, price: u32 },
     TakeOrder {id: u32, pub_key: u32},
     UploadAddress {id: u32, address_enc: u32},
     Confirm {id: u32},
