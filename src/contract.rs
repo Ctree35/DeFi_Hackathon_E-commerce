@@ -5,7 +5,8 @@ use cw2::set_contract_version;
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{State, STATE, Goods, GoodsStatus};
+use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST};
+use serde::de::Unexpected::Map;
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:defi_ecommerce";
@@ -20,13 +21,10 @@ pub fn instantiate(
 ) -> Result<Response, ContractError> {
     let state = State {
         balance: deps.querier.query_all_balances(env.contract.address).unwrap(),
-        goods_list: vec![],
-        order_list: vec![],
         owner: info.sender.clone(),
     };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     STATE.save(deps.storage, &state)?;
-
     Ok(Response::new()
         .add_attribute("method", "instantiate")
         .add_attribute("owner", info.sender))
@@ -41,7 +39,6 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::Post {name, price, denom, location} => try_post(deps, info, &name, price, &denom, &location),
-        _ => unimplemented!()
 //        ExecuteMsg::Buy {name, location} => try_buy(deps, info, name, location),
 //        ExecuteMsg::Reset { price} => try_reset(deps, info, price),
 //        ExecuteMsg::TakeOrder { id, pub_key} => try_take_order(deps, info, id, pub_key),
@@ -50,23 +47,37 @@ pub fn execute(
 //        ExecuteMsg::DisputeBroken { id } => try_dispute_broken(deps, info, id),
 //        ExecuteMsg::DisputeUnsatisfied { id } => try_dispute_unsatisfied(deps, info, id),
 //        ExecuteMsg::DisputeConfirm { id} => try_dispute_confirm(deps, info, id)
+        _ => unimplemented!()
+
     }
 }
 
 pub fn try_post(deps: DepsMut, info: MessageInfo, name: &str, price: u32, denom: &str, location: &str) -> Result<Response, ContractError> {
-    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-        let good = Goods {
-            name: String::from(name),
-            seller: info.sender,
-            price: Coin {denom: String::from(denom), amount: Uint128::from(price)},
-            location: String::from(location),
-            status: GoodsStatus::Available
-        };
-        state.goods_list.push(Box::new(good));
-        Ok(state)
-    })?;
+    let good = Goods {
+        name: String::from(name),
+        seller: info.sender,
+        price: Coin {denom: String::from(denom), amount: Uint128::from(price)},
+        location: String::from(location),
+        status: GoodsStatus::Available
+    };
+    GOODS_LIST.save(deps.storage, name, &good)?;
     Ok(Response::new().add_attribute("method", "try_post"))
 }
+
+//pub fn try_buy(deps: DepsMut, info: MessageInfo, name: &str, location: &str) -> Result<Response, ContractError> {
+//    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
+//        let good = Goods {
+//            name: String::from(name),
+//            seller: info.sender,
+//            price: Coin {denom: String::from(denom), amount: Uint128::from(price)},
+//            location: String::from(location),
+//            status: GoodsStatus::Available
+//        };
+//        state.goods_list.push(Box::new(good));
+//        Ok(state)
+//    })?;
+//    Ok(Response::new().add_attribute("method", "try_post"))
+//}
 //pub fn try_increment(deps: DepsMut) -> Result<Response, ContractError> {
 //    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
 //        state.count += 1;

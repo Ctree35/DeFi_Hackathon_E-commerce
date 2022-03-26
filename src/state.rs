@@ -8,8 +8,6 @@ use cw_storage_plus::{Item, Map};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
     pub balance: Vec<Coin>,
-    pub goods_list: Vec<Box<Goods>>,
-    pub order_list: Vec<Box<Order>>,
     pub owner: Addr,
 }
 
@@ -57,3 +55,5 @@ pub enum OrderStatus {
 }
 
 pub const STATE: Item<State> = Item::new("state");
+pub const GOODS_LIST: Map<&str, Goods> = Map::new("goods_list");
+pub const ORDER_LIST: Map<&str, Order> = Map::new("order_list");
