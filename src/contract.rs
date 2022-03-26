@@ -1,3 +1,4 @@
+use std::iter::Map;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Coin, Uint128, from_binary, AllBalanceResponse, Addr};
@@ -5,11 +6,13 @@ use cosmwasm_std::OverflowOperation::Add;
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST, Order, OrderStatus, ORDER_LIST, SHIPPING_FEE};
+use crate::msg::{ExecuteMsg, GoodsResponse, InstantiateMsg, OrdersResponse, QueryMsg, ShippingFeesResponse};
+use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST, ORDER_LIST, SHIPPING_FEE_MATRIX, Order, OrderStatus};
 use crate::helper::assert_sent_sufficient_coin;
 use serde::de::Unexpected::Map;
 use crate::state::GoodsStatus::Ordered;
+use cosmwasm_std::Order::Ascending;
+
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:defi_ecommerce";
@@ -140,13 +143,42 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 //        QueryMsg::GetOrderDetail {id} => to_binary(&query_order_detail(deps, id)?),
 //        QueryMsg::GetAddresses {id} => to_binary(&query_addresses(deps, id)?),
 //    }
-    unimplemented!()
+    match msg {
+        QueryMsg::GetGoods {} => to_binary(&query_goods(deps)?),
+        QueryMsg::GetOrders {} => to_binary(&query_orders(deps)?),
+        QueryMsg::GetShippingFees {} => to_binary(&query_shipping_fees(deps)?),
+    }
 }
 
 //pub fn query_count(deps: Deps) -> StdResult<CountResponse> {
 //    let state = STATE.load(deps.storage)?;
 //    Ok(CountResponse{count: state.count})
 //}
+
+pub fn query_goods(deps: Deps) -> StdResult<GoodsResponse>{
+    // let state = STATE.load(deps.storage)?;
+    let good_list: StdResult<Vec<_>> = GOODS_LIST.range(deps.storage, None, None, Order::Ascending).collect();
+    let good_list = good_list.unwrap();
+    let goods = good_list.iter().map(|x| x.1.clone()).collect();
+
+    Ok(GoodsResponse{goods: {goods}})
+}
+
+pub fn query_orders(deps: Deps) -> StdResult<OrdersResponse> {
+    let order_list: StdResult<Vec<_>> = ORDER_LIST.range(deps.storage, None, None, Order::Ascending).collect();
+    let order_list = order_list.unwrap();
+    let orders = order_list.iter().map(|x| x.1.clone()).collect();
+
+    Ok(OrdersResponse{orders: {orders}})
+}
+
+pub fn query_shipping_fees(deps: Deps) -> StdResult<ShippingFeesResponse> {
+    let shipping_fee_matrix: StdResult<Vec<_>> = SHIPPING_FEE_MATRIX.range(deps.storage, None, None, Order::Ascending).collect();
+    let shipping_fee_matrix = shipping_fee_matrix.unwrap();
+    let shipping_fees = shipping_fee_matrix.iter().map(|x| x.1.clone()).collect();
+
+    Ok(ShippingFeesResponse{shipping_fees: {shipping_fees}})
+}
 
 #[cfg(test)]
 mod tests {
@@ -205,6 +237,10 @@ mod tests {
 
         let info2 = mock_info("buyer", &coins(2000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info2, msg2).unwrap();
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetGoods {}).unwrap();
+        let value: GoodsResponse = from_binary(&res).unwrap();
+        println!("{:?}", value);
 
 //        // it worked, let's query the state
 //        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
