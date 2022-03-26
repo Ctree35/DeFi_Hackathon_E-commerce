@@ -25,8 +25,8 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     GetGoods {},
-    // GetOrders {},
-    // GetDistance {},
+    GetOrders {},
+    GetShippingFees {},
     // GetOrderDetail {id: u32},
     // GetAddresses {id: u32}
 }
@@ -43,8 +43,8 @@ pub struct OrdersResponse {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct DistanceResponse {
-    pub distance: u32,
+pub struct ShippingFeesResponse {
+    pub shipping_fees: Vec<u32>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

@@ -6,8 +6,8 @@ use cosmwasm_std::Order::Ascending;
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, GoodsResponse, InstantiateMsg, QueryMsg};
-use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST};
+use crate::msg::{ExecuteMsg, GoodsResponse, OrdersResponse, InstantiateMsg, QueryMsg, ShippingFeesResponse};
+use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST, ORDER_LIST, SHIPPING_FEE_MATRIX};
 // use serde::de::Unexpected::Map;
 
 // version info for migration info
@@ -119,6 +119,8 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 //    }
     match msg {
         QueryMsg::GetGoods {} => to_binary(&query_goods(deps)?),
+        QueryMsg::GetOrders {} => to_binary(&query_orders(deps)?),
+        QueryMsg::GetShippingFees {} => to_binary(&query_shipping_fees(deps)?),
     }
 }
 
@@ -134,6 +136,22 @@ pub fn query_goods(deps: Deps) -> StdResult<GoodsResponse>{
     let goods = good_list.iter().map(|x| x.1.clone()).collect();
 
     Ok(GoodsResponse{goods: {goods}})
+}
+
+pub fn query_orders(deps: Deps) -> StdResult<OrdersResponse> {
+    let order_list: StdResult<Vec<_>> = ORDER_LIST.range(deps.storage, None, None, Order::Ascending).collect();
+    let order_list = order_list.unwrap();
+    let orders = order_list.iter().map(|x| x.1.clone()).collect();
+
+    Ok(OrdersResponse{orders: {orders}})
+}
+
+pub fn query_shipping_fees(deps: Deps) -> StdResult<ShippingFeesResponse> {
+    let shipping_fee_matrix: StdResult<Vec<_>> = SHIPPING_FEE_MATRIX.range(deps.storage, None, None, Order::Ascending).collect();
+    let shipping_fee_matrix = shipping_fee_matrix.unwrap();
+    let shipping_fees = shipping_fee_matrix.iter().map(|x| x.1.clone()).collect();
+
+    Ok(ShippingFeesResponse{shipping_fees: {shipping_fees}})
 }
 
 #[cfg(test)]

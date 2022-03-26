@@ -57,3 +57,4 @@ pub enum OrderStatus {
 pub const STATE: Item<State> = Item::new("state");
 pub const GOODS_LIST: Map<&str, Goods> = Map::new("goods_list");
 pub const ORDER_LIST: Map<&str, Order> = Map::new("order_list");
+pub const SHIPPING_FEE_MATRIX: Map<(&str, &str), u32> = Map::new("shipping_fee_matrix");
