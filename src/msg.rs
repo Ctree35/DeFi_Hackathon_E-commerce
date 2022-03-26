@@ -51,3 +51,9 @@ pub struct DistanceResponse {
 pub struct OrderDetailResponse {
     pub order: Order,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct AddressesResponse {
+    pub buyer: u32,
+    pub seller: u32
+}
