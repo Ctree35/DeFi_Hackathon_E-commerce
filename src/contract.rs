@@ -391,10 +391,22 @@ mod tests {
 
         let msg3 = ExecuteMsg::TakeOrder {
             id: 0,
-            pub_key: String::from("fuck")
+            pub_key: String::from("rsa1")
         };
-        let info3 = mock_info("shipper", &coins(20, "LUNA"));
+        let info3 = mock_info("shipper1", &coins(20, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info3, msg3).unwrap();
+
+        let msg4 = ExecuteMsg::TakeOrder {
+            id: 0,
+            pub_key: String::from("rsa2")
+        };
+        let info4 = mock_info("shipper2", &coins(50, "LUNA"));
+        let err = execute(deps.as_mut(), mock_env(), info4, msg4).unwrap_err();
+        assert_eq!(err, ContractError::OrderNotAvailable {});
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetOrders {}).unwrap();
+        let value: OrdersResponse = from_binary(&res).unwrap();
+        println!("{:?}", value);
     }
 
     #[test]
