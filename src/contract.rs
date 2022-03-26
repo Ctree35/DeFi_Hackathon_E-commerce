@@ -301,6 +301,11 @@ mod tests {
             location: String::from("Montreal")
         };
         let _res = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetGoods {}).unwrap();
+        let value: GoodsResponse = from_binary(&res).unwrap();
+        println!("{:?}", value);
+
         let msg2 = ExecuteMsg::Reset {
             name: String::from("TV"),
             price: 20
@@ -313,6 +318,10 @@ mod tests {
             _ => panic!("Not buyer, not authorized!")
         }
         let _res = execute(deps.as_mut(), mock_env(), info, msg2);
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetGoods {}).unwrap();
+        let value: GoodsResponse = from_binary(&res).unwrap();
+        println!("{:?}", value);
     }
 
     #[test]
