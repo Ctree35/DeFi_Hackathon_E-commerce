@@ -209,32 +209,6 @@ pub fn try_confirm(deps: DepsMut, info: MessageInfo, id: u32) -> Result<Response
         .add_message(CosmosMsg::Bank(BankMsg::Send { to_address: order.seller.into_string(), amount: vec![order.price] }))
         .add_message(CosmosMsg::Bank(BankMsg::Send { to_address: order.shipper.into_string(), amount: vec![order.shipping_fee] })))
 }
-//pub fn try_increment(deps: DepsMut) -> Result<Response, ContractError> {
-//    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-//        state.count += 1;
-//        Ok(state)
-//    })?;
-//    Ok(Response::new().add_attribute("method", "try_increment"))
-//}
-//
-//pub fn try_decrement(deps: DepsMut) -> Result<Response, ContractError> {
-//    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-//        state.count -= 1;
-//        Ok(state)
-//    })?;
-//    Ok(Response::new().add_attribute("method", "try_decrement"))
-//}
-//
-//pub fn try_reset(deps: DepsMut, info: MessageInfo, count: i32) -> Result<Response, ContractError> {
-//    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-//        if info.sender != state.owner {
-//            return Err(ContractError::Unauthorized{});
-//        }
-//        state.count = count;
-//        Ok(state)
-//    })?;
-//    Ok(Response::new().add_attribute("method", "reset"))
-//}
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
@@ -252,11 +226,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::GetShippingFees {} => to_binary(&query_shipping_fees(deps)?),
     }
 }
-
-//pub fn query_count(deps: Deps) -> StdResult<CountResponse> {
-//    let state = STATE.load(deps.storage)?;
-//    Ok(CountResponse{count: state.count})
-//}
 
 pub fn query_goods(deps: Deps) -> StdResult<GoodsResponse>{
     // let state = STATE.load(deps.storage)?;
