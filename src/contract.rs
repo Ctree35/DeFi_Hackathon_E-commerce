@@ -9,7 +9,7 @@ use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, GoodsResponse, InstantiateMsg, OrdersResponse, QueryMsg, ShippingFeesResponse};
 use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST, ORDER_LIST, SHIPPING_FEE_MATRIX, Order, OrderStatus};
 use crate::helper::assert_sent_sufficient_coin;
-use serde::de::Unexpected::Map;
+// use serde::de::Unexpected::Map;
 use crate::state::GoodsStatus::Ordered;
 use cosmwasm_std::Order::Ascending;
 
@@ -157,7 +157,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 
 pub fn query_goods(deps: Deps) -> StdResult<GoodsResponse>{
     // let state = STATE.load(deps.storage)?;
-    let good_list: StdResult<Vec<_>> = GOODS_LIST.range(deps.storage, None, None, Order::Ascending).collect();
+    let good_list: StdResult<Vec<_>> = GOODS_LIST.range(deps.storage, None, None, Ascending).collect();
     let good_list = good_list.unwrap();
     let goods = good_list.iter().map(|x| x.1.clone()).collect();
 
@@ -165,7 +165,7 @@ pub fn query_goods(deps: Deps) -> StdResult<GoodsResponse>{
 }
 
 pub fn query_orders(deps: Deps) -> StdResult<OrdersResponse> {
-    let order_list: StdResult<Vec<_>> = ORDER_LIST.range(deps.storage, None, None, Order::Ascending).collect();
+    let order_list: StdResult<Vec<_>> = ORDER_LIST.range(deps.storage, None, None, Ascending).collect();
     let order_list = order_list.unwrap();
     let orders = order_list.iter().map(|x| x.1.clone()).collect();
 
@@ -173,7 +173,7 @@ pub fn query_orders(deps: Deps) -> StdResult<OrdersResponse> {
 }
 
 pub fn query_shipping_fees(deps: Deps) -> StdResult<ShippingFeesResponse> {
-    let shipping_fee_matrix: StdResult<Vec<_>> = SHIPPING_FEE_MATRIX.range(deps.storage, None, None, Order::Ascending).collect();
+    let shipping_fee_matrix: StdResult<Vec<_>> = SHIPPING_FEE_MATRIX.range(deps.storage, None, None, Ascending).collect();
     let shipping_fee_matrix = shipping_fee_matrix.unwrap();
     let shipping_fees = shipping_fee_matrix.iter().map(|x| x.1.clone()).collect();
 
