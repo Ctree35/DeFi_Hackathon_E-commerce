@@ -1,12 +1,14 @@
+use std::iter::Map;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Coin, Uint128, from_binary, AllBalanceResponse};
+use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Coin, Uint128, from_binary, AllBalanceResponse, Order};
+use cosmwasm_std::Order::Ascending;
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
+use crate::msg::{ExecuteMsg, GoodsResponse, InstantiateMsg, QueryMsg};
 use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST};
-use serde::de::Unexpected::Map;
+// use serde::de::Unexpected::Map;
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:defi_ecommerce";
@@ -115,13 +117,24 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 //        QueryMsg::GetOrderDetail {id} => to_binary(&query_order_detail(deps, id)?),
 //        QueryMsg::GetAddresses {id} => to_binary(&query_addresses(deps, id)?),
 //    }
-    unimplemented!()
+    match msg {
+        QueryMsg::GetGoods {} => to_binary(&query_goods(deps)?),
+    }
 }
 
 //pub fn query_count(deps: Deps) -> StdResult<CountResponse> {
 //    let state = STATE.load(deps.storage)?;
 //    Ok(CountResponse{count: state.count})
 //}
+
+pub fn query_goods(deps: Deps) -> StdResult<GoodsResponse>{
+    // let state = STATE.load(deps.storage)?;
+    let good_list: StdResult<Vec<_>> = GOODS_LIST.range(deps.storage, None, None, Order::Ascending).collect();
+    let good_list = good_list.unwrap();
+    let goods = good_list.iter().map(|x| x.1.clone()).collect();
+
+    Ok(GoodsResponse{goods: {goods}})
+}
 
 #[cfg(test)]
 mod tests {
@@ -147,6 +160,10 @@ mod tests {
             location: String::from("Montreal")
         };
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetGoods {}).unwrap();
+        let value: GoodsResponse = from_binary(&res).unwrap();
+        println!("{:?}", value);
 
 //        // it worked, let's query the state
 //        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();

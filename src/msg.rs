@@ -25,10 +25,10 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     GetGoods {},
-    GetOrders {},
-    GetDistance {},
-    GetOrderDetail {id: u32},
-    GetAddresses {id: u32}
+    // GetOrders {},
+    // GetDistance {},
+    // GetOrderDetail {id: u32},
+    // GetAddresses {id: u32}
 }
 
 // We define a custom struct for each query response
