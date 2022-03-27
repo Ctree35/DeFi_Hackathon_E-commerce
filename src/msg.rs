@@ -27,7 +27,7 @@ pub enum QueryMsg {
     GetGoods {},
     GetOrders {},
     GetShippingFees {},
-    // GetOrderDetail {id: u32},
+    GetOrderDetail {id: u32},
     GetAddresses {id: u32},
     GetBalance {}
 }
