@@ -50,8 +50,8 @@ pub struct OrderDetailResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AddressesResponse {
-    pub buyer: String,
-    pub seller: String,
+    pub buyer: Vec<u8>,
+    pub seller: Vec<u8>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
