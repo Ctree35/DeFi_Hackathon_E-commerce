@@ -60,8 +60,8 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Post {name, price, denom, area} => try_post(deps, info, &name, price, &denom, &area),
-        ExecuteMsg::Buy {name, area} => try_buy(deps, info, &name, &area),
+        ExecuteMsg::Post {name, price, denom, seller_area} => try_post(deps, info, &name, price, &denom, &seller_area),
+        ExecuteMsg::Buy {name, buyer_area} => try_buy(deps, info, &name, &buyer_area),
         ExecuteMsg::Reset {name, price} => try_reset(deps, info, &name, price),
         ExecuteMsg::TakeOrder { id, pub_key, price} => try_take_order(deps, info, id, pub_key, price),
         ExecuteMsg::ChooseBid {id, shipper} => try_choose_bid(deps, info, id, shipper),
@@ -75,19 +75,19 @@ pub fn execute(
     }
 }
 
-pub fn try_post(deps: DepsMut, info: MessageInfo, name: &str, price: u32, denom: &str, area: &str) -> Result<Response, ContractError> {
+pub fn try_post(deps: DepsMut, info: MessageInfo, name: &str, price: u32, denom: &str, seller_area: &str) -> Result<Response, ContractError> {
     let good = Goods {
         name: String::from(name),
         seller: info.sender,
         price: coin(Uint128::from(price).u128(), String::from(denom)),
-        area: String::from(area),
+        seller_area: String::from(seller_area),
         status: GoodsStatus::Available
     };
     GOODS_LIST.save(deps.storage, name, &good)?;
     Ok(Response::new().add_attribute("method", "try_post"))
 }
 
-pub fn try_buy(deps: DepsMut, info: MessageInfo, name: &str, area: &str) -> Result<Response, ContractError> {
+pub fn try_buy(deps: DepsMut, info: MessageInfo, name: &str, buyer_area: &str) -> Result<Response, ContractError> {
     let mut good = GOODS_LIST.load(deps.storage, name)?;
     if good.status != Available {
         return Err(ContractError::GoodsNotAvailable {});
@@ -107,9 +107,9 @@ pub fn try_buy(deps: DepsMut, info: MessageInfo, name: &str, area: &str) -> Resu
         seller: good.clone().seller,
         goods: good.clone(),
         price: good.clone().price,
-        buyer_address: String::from(area),
+        buyer_area: String::from(buyer_area),
         shipper_bids: vec![],
-        shipping_fee: SHIPPING_FEE_MATRIX.load(deps.storage, (&good.clone().area, area))?,
+        shipping_fee: SHIPPING_FEE_MATRIX.load(deps.storage, (&good.clone().seller_area, buyer_area))?,
         shipper: Addr::unchecked("Dummy_Shipper"),
         shipper_key: Default::default(),
         buyer_addr_enc: Default::default(),
@@ -432,7 +432,7 @@ mod tests {
             name: String::from("TV"),
             price: 200,
             denom: String::from("LUNA"),
-            area: String::from("Montreal")
+            seller_area: String::from("Montreal")
         };
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 //        // it worked, let's query the state
@@ -460,14 +460,14 @@ mod tests {
             name: String::from("TV"),
             price: 200,
             denom: String::from("LUNA"),
-            area: String::from("Montreal")
+            seller_area: String::from("Montreal")
         };
 
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 
         let msg2 = ExecuteMsg::Buy {
             name: String::from("TV"),
-            area: String::from("Montreal")
+            buyer_area: String::from("Montreal")
         };
 
         let info2 = mock_info("buyer", &coins(2000, "LUNA"));
@@ -501,7 +501,7 @@ mod tests {
             name: String::from("TV"),
             price: 200,
             denom: String::from("LUNA"),
-            area: String::from("Montreal")
+            seller_area: String::from("Montreal")
         };
         let _res = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 
@@ -544,14 +544,14 @@ mod tests {
             name: String::from("TV"),
             price: 200,
             denom: String::from("LUNA"),
-            area: String::from("Montreal")
+            seller_area: String::from("Montreal")
         };
 
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 
         let msg2 = ExecuteMsg::Buy {
             name: String::from("TV"),
-            area: String::from("Montreal")
+            buyer_area: String::from("Montreal")
         };
 
         let info2 = mock_info("buyer", &coins(2000, "LUNA"));
@@ -600,14 +600,14 @@ mod tests {
             name: String::from("TV"),
             price: 200,
             denom: String::from("LUNA"),
-            area: String::from("Montreal")
+            seller_area: String::from("Montreal")
         };
 
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 
         let msg2 = ExecuteMsg::Buy {
             name: String::from("TV"),
-            area: String::from("Montreal")
+            buyer_area: String::from("Montreal")
         };
 
         let info2 = mock_info("buyer", &coins(2000, "LUNA"));
@@ -630,14 +630,14 @@ mod tests {
 
         let msg4 = ExecuteMsg::UploadAddress {
             id: 0,
-            address_enc: String::from("my address")
+            address_enc: String::from("my address buyer")
         };
         let info4 = mock_info("buyer", &coins(0, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info4, msg4).unwrap();
 
         let msg5 = ExecuteMsg::UploadAddress {
             id: 0,
-            address_enc: String::from("my address")
+            address_enc: String::from("my address seller")
         };
         let info5 = mock_info("seller", &coins(0, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info5, msg5).unwrap();
@@ -658,14 +658,14 @@ mod tests {
             name: String::from("TV"),
             price: 200,
             denom: String::from("LUNA"),
-            area: String::from("Montreal")
+            seller_area: String::from("Montreal")
         };
 
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 
         let msg2 = ExecuteMsg::Buy {
             name: String::from("TV"),
-            area: String::from("Montreal")
+            buyer_area: String::from("Montreal")
         };
 
         let info2 = mock_info("buyer", &coins(2000, "LUNA"));
@@ -722,14 +722,14 @@ mod tests {
             name: String::from("TV"),
             price: 200,
             denom: String::from("LUNA"),
-            area: String::from("Montreal")
+            seller_area: String::from("Montreal")
         };
 
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 
         let msg2 = ExecuteMsg::Buy {
             name: String::from("TV"),
-            area: String::from("Montreal")
+            buyer_area: String::from("Montreal")
         };
 
         let info2 = mock_info("buyer", &coins(2000, "LUNA"));

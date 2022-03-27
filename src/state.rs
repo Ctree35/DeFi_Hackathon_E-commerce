@@ -16,18 +16,18 @@ pub struct Goods {
     pub name: String,
     pub seller: Addr,
     pub price: Coin,
-    pub area: String,
+    pub seller_area: String,
     pub status: GoodsStatus
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Order {
     pub id: u32,
-    pub buyer: Addr,
-    pub seller: Addr,
+    pub buyer: Addr,  // hash address on chain
+    pub seller: Addr,  // hash address on chain
     pub goods: Goods,
     pub price: Coin,
-    pub buyer_address: String,
+    pub buyer_area: String,
     pub shipper_bids: Vec<ShipperBid>,
     pub shipping_fee: Coin,
     pub shipper: Addr,
