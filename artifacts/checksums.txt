@@ -1,1 +1,1 @@
-ac65ad8f551cd06ba09816106232594d6e6d9060291b4487da42f8067720e468  DeFi_Hackathon_Picnic-aarch64.wasm
+15d8dea57bde8e944eb09b4690d6dcaaeddd697388f83e2bd40df5da41cb11fa  DeFi_Hackathon_Picnic-aarch64.wasm

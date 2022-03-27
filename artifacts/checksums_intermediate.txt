@@ -1,1 +1,1 @@
-f106ddb850cc7d0a84972c254f48ee4b77c5859f76573798c824cec667f1d6db  ./target/wasm32-unknown-unknown/release/DeFi_Hackathon_Picnic.wasm
+ef940a9a3dad019bca2ffaeb31bb7f19aab050e3d26e0bcd4242ad17b586d926  ./target/wasm32-unknown-unknown/release/DeFi_Hackathon_Picnic.wasm
