@@ -28,12 +28,20 @@ pub struct Order {
     pub goods: Goods,
     pub price: Coin,
     pub buyer_address: String,
+    pub shipper_bids: Vec<ShipperBid>,
     pub shipping_fee: Coin,
     pub shipper: Addr,
     pub shipper_key: String,
     pub buyer_addr_enc: String,
     pub seller_addr_enc: String,
     pub status: OrderStatus
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct ShipperBid {
+    pub shipper: Addr,
+    pub pub_key: String,
+    pub price: Coin
 }
 
 //pub struct Location {
@@ -51,6 +59,7 @@ pub enum GoodsStatus {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub enum OrderStatus {
     Setup,
+    Bidding,
     WaitingAddressUpload,
     Shipping,
     Confirmed,

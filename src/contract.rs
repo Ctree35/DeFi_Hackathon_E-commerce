@@ -9,13 +9,13 @@ use cw2::set_contract_version;
 use crate::error::ContractError;
 use crate::msg::{AddressesResponse, BalanceResponse, ExecuteMsg, GoodsResponse, InstantiateMsg, OrderDetailResponse, OrdersResponse, QueryMsg, ShippingFeesResponse};
 
-use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST, ORDER_LIST, SHIPPING_FEE_MATRIX, Order, OrderStatus};
+use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST, ORDER_LIST, SHIPPING_FEE_MATRIX, Order, OrderStatus, ShipperBid};
 use crate::helper::{assert_sent_sufficient_coin, merge_coin};
 // use serde::de::Unexpected::Map;
 use crate::state::GoodsStatus::{Available, Ordered, Returned, Sold};
 use cosmwasm_std::Order::Ascending;
 use crate::ContractError::Unauthorized;
-use crate::state::OrderStatus::{Confirmed, Disputed, DisputingBroken, DisputingUnsatisfied, Setup, Shipping, WaitingAddressUpload};
+use crate::state::OrderStatus::{Bidding, Confirmed, Disputed, DisputingBroken, DisputingUnsatisfied, Setup, Shipping, WaitingAddressUpload};
 
 
 // version info for migration info
@@ -63,7 +63,8 @@ pub fn execute(
         ExecuteMsg::Post {name, price, denom, area} => try_post(deps, info, &name, price, &denom, &area),
         ExecuteMsg::Buy {name, area} => try_buy(deps, info, &name, &area),
         ExecuteMsg::Reset {name, price} => try_reset(deps, info, &name, price),
-        ExecuteMsg::TakeOrder { id, pub_key} => try_take_order(deps, info, id, pub_key),
+        ExecuteMsg::TakeOrder { id, pub_key, price} => try_take_order(deps, info, id, pub_key, price),
+        ExecuteMsg::ChooseBid {id, shipper} => try_choose_bid(deps, info, id, shipper),
         ExecuteMsg::UploadAddress { id, address_enc } => try_upload_address(deps, info, id, address_enc),
         ExecuteMsg::Confirm { id } => try_confirm(deps, info, id),
         ExecuteMsg::DisputeBroken { id } => try_dispute_broken(deps, info, id),
@@ -107,6 +108,7 @@ pub fn try_buy(deps: DepsMut, info: MessageInfo, name: &str, area: &str) -> Resu
         goods: good.clone(),
         price: good.clone().price,
         buyer_address: String::from(area),
+        shipper_bids: vec![],
         shipping_fee: SHIPPING_FEE_MATRIX.load(deps.storage, (&good.clone().area, area))?,
         shipper: Addr::unchecked("Dummy_Shipper"),
         shipper_key: Default::default(),
@@ -142,15 +144,19 @@ pub fn try_reset(deps: DepsMut, info: MessageInfo, name: &str, price: u32) -> Re
     Ok(Response::new().add_attribute("method", "try_reset"))
 }
 
-pub fn try_take_order(deps: DepsMut, info: MessageInfo, id: u32, pub_key: String) -> Result<Response, ContractError> {
+pub fn try_take_order(deps: DepsMut, info: MessageInfo, id: u32, pub_key: String, price: Coin) -> Result<Response, ContractError> {
     let mut order = ORDER_LIST.load(deps.storage, &id.to_string())?;
-    if order.status != Setup {
+    if order.status != Setup && order.status != Bidding {
         return Err(ContractError::OrderNotAvailable {});
     }
     assert_sent_sufficient_coin(&info.funds, vec![order.clone().price])?;
-    order.status = WaitingAddressUpload;
-    order.shipper = info.sender;
-    order.shipper_key = pub_key;
+    order.status = Bidding;
+    let bid = ShipperBid {
+        shipper: info.sender,
+        pub_key: pub_key,
+        price: price
+    };
+    order.shipper_bids.push(bid);
     let update_order = |d: Option<Order>| -> StdResult<Order> {
         match d {
             Some(_) => Ok(order.clone()),
@@ -160,6 +166,36 @@ pub fn try_take_order(deps: DepsMut, info: MessageInfo, id: u32, pub_key: String
     ORDER_LIST.update(deps.storage, &id.to_string(), update_order)?;
 
     Ok(Response::new().add_attribute("method", "try_take_order"))
+}
+
+pub fn try_choose_bid(deps: DepsMut, info: MessageInfo, id: u32, shipper: String) -> Result<Response, ContractError> {
+    let mut order = ORDER_LIST.load(deps.storage, &id.to_string())?;
+    if order.status != Bidding {
+        return Err(ContractError::OrderNotAvailable {});
+    }
+    if info.sender != order.buyer {
+        return Err(ContractError::Unauthorized {});
+    }
+    match order.shipper_bids.iter().find(|x| x.shipper == Addr::unchecked(shipper.clone())) {
+        Some(x) => {
+            order.status = WaitingAddressUpload;
+            order.shipper = x.shipper.clone();
+            order.shipper_key = x.pub_key.clone();
+            order.shipping_fee = x.price.clone();
+            let update_order = |d: Option<Order>| -> StdResult<Order> {
+                match d {
+                    Some(_) => Ok(order.clone()),
+                    None => unimplemented!(),
+                }
+            };
+            ORDER_LIST.update(deps.storage, &id.to_string(), update_order)?;
+
+            Ok(Response::new().add_attribute("method", "try_choose_bid"))
+        }
+        None => {
+            Err(ContractError::ShipperNotFound {})
+        }
+    }
 }
 
 pub fn try_upload_address(deps: DepsMut, info: MessageInfo, id: u32, address_enc: String) -> Result<Response, ContractError> {
@@ -523,18 +559,26 @@ mod tests {
 
         let msg3 = ExecuteMsg::TakeOrder {
             id: 0,
-            pub_key: String::from("rsa1")
+            pub_key: String::from("rsa1"),
+            price: coin(10, "LUNA")
         };
         let info3 = mock_info("shipper1", &coins(2000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info3, msg3).unwrap();
 
         let msg4 = ExecuteMsg::TakeOrder {
             id: 0,
-            pub_key: String::from("rsa2")
+            pub_key: String::from("rsa2"),
+            price: coin(10, "LUNA")
         };
-        let info4 = mock_info("shipper2", &coins(50, "LUNA"));
-        let err = execute(deps.as_mut(), mock_env(), info4, msg4).unwrap_err();
-        assert_eq!(err, ContractError::OrderNotAvailable {});
+        let info4 = mock_info("shipper2", &coins(5000, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info4, msg4).unwrap();
+
+        let msg33 = ExecuteMsg::ChooseBid {
+            id: 0,
+            shipper: String::from("shipper1")
+        };
+        let info33 = mock_info("buyer", &coins(0, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info33, msg33).unwrap();
 
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetOrders {}).unwrap();
         let value: OrdersResponse = from_binary(&res).unwrap();
@@ -571,10 +615,18 @@ mod tests {
 
         let msg3 = ExecuteMsg::TakeOrder {
             id: 0,
-            pub_key: String::from("fuck")
+            pub_key: String::from("rsa1"),
+            price: coin(10, "LUNA")
         };
         let info3 = mock_info("shipper", &coins(2000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info3, msg3).unwrap();
+
+        let msg33 = ExecuteMsg::ChooseBid {
+            id: 0,
+            shipper: String::from("shipper")
+        };
+        let info33 = mock_info("buyer", &coins(0, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info33, msg33).unwrap();
 
         let msg4 = ExecuteMsg::UploadAddress {
             id: 0,
@@ -621,10 +673,18 @@ mod tests {
 
         let msg3 = ExecuteMsg::TakeOrder {
             id: 0,
-            pub_key: String::from("rsa1")
+            pub_key: String::from("rsa1"),
+            price: coin(10, "LUNA")
         };
         let info3 = mock_info("shipper", &coins(2000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info3, msg3).unwrap();
+
+        let msg33 = ExecuteMsg::ChooseBid {
+            id: 0,
+            shipper: String::from("shipper")
+        };
+        let info33 = mock_info("buyer", &coins(0, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info33, msg33).unwrap();
 
         let msg4 = ExecuteMsg::UploadAddress {
             id: 0,
@@ -675,12 +735,28 @@ mod tests {
         let info2 = mock_info("buyer", &coins(2000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info2, msg2).unwrap();
 
-        let msg3 = ExecuteMsg::TakeOrder {
+        let msg31 = ExecuteMsg::TakeOrder {
             id: 0,
-            pub_key: String::from("rsa1")
+            pub_key: String::from("rsa1"),
+            price: coin(10, "LUNA")
         };
-        let info3 = mock_info("shipper", &coins(2000, "LUNA"));
-        let _res = execute(deps.as_mut(), mock_env(), info3, msg3).unwrap();
+        let info31 = mock_info("shipper1", &coins(2000, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info31, msg31).unwrap();
+
+        let msg32 = ExecuteMsg::TakeOrder {
+            id: 0,
+            pub_key: String::from("rsa1"),
+            price: coin(8, "LUNA")
+        };
+        let info32 = mock_info("shipper2", &coins(2000, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info32, msg32).unwrap();
+
+        let msg33 = ExecuteMsg::ChooseBid {
+            id: 0,
+            shipper: String::from("shipper1")
+        };
+        let info33 = mock_info("buyer", &coins(0, "LUNA"));
+        let _res = execute(deps.as_mut(), mock_env(), info33, msg33).unwrap();
 
         let msg4 = ExecuteMsg::UploadAddress {
             id: 0,
