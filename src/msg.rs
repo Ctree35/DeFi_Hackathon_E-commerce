@@ -1,6 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use cosmwasm_std::Uint128;
+use cosmwasm_std::{Coin, Uint128};
 use crate::state::{Goods, Order};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -29,6 +29,7 @@ pub enum QueryMsg {
     GetShippingFees {},
     // GetOrderDetail {id: u32},
     GetAddresses {id: u32},
+    GetBalance {}
 }
 
 // We define a custom struct for each query response
@@ -56,4 +57,9 @@ pub struct OrderDetailResponse {
 pub struct AddressesResponse {
     pub buyer: String,
     pub seller: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct BalanceResponse {
+    pub balance: Vec<Coin>
 }

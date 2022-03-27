@@ -7,7 +7,7 @@ use cosmwasm_std::{coin, coins};
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::msg::{AddressesResponse, ExecuteMsg, GoodsResponse, InstantiateMsg, OrdersResponse, QueryMsg, ShippingFeesResponse};
+use crate::msg::{AddressesResponse, BalanceResponse, ExecuteMsg, GoodsResponse, InstantiateMsg, OrdersResponse, QueryMsg, ShippingFeesResponse};
 use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST, ORDER_LIST, SHIPPING_FEE_MATRIX, Order, OrderStatus};
 use crate::helper::{assert_sent_sufficient_coin, merge_coin};
 // use serde::de::Unexpected::Map;
@@ -67,7 +67,7 @@ pub fn try_post(deps: DepsMut, info: MessageInfo, name: &str, price: u32, denom:
     let good = Goods {
         name: String::from(name),
         seller: info.sender,
-        price: Coin {denom: String::from(denom), amount: Uint128::from(price)},
+        price: coin(Uint128::from(price).u128(), String::from(denom)),
         area: String::from(area),
         status: GoodsStatus::Available
     };
@@ -80,11 +80,11 @@ pub fn try_buy(deps: DepsMut, info: MessageInfo, name: &str, area: &str) -> Resu
     if good.status != Available {
         return Err(ContractError::GoodsNotAvailable {});
     }
-    assert_sent_sufficient_coin(&info.funds, Some(good.clone().price))?;
+    assert_sent_sufficient_coin(&info.funds, vec![good.clone().price])?;
     good.status = Ordered;
     let update_good = |d: Option<Goods>| -> StdResult<Goods> {
         match d {
-            Some(one) => Ok(good.clone()),
+            Some(_) => Ok(good.clone()),
             None => unimplemented!(),
         }
     };
@@ -132,11 +132,11 @@ pub fn try_reset(deps: DepsMut, info: MessageInfo, name: &str, price: u32) -> Re
 }
 
 pub fn try_take_order(deps: DepsMut, info: MessageInfo, id: u32, pub_key: String) -> Result<Response, ContractError> {
-    assert_sent_sufficient_coin(&info.funds, Some(coin(10, "LUNA")))?;
     let mut order = ORDER_LIST.load(deps.storage, &id.to_string())?;
     if order.status != Setup {
         return Err(ContractError::OrderNotAvailable {});
     }
+    assert_sent_sufficient_coin(&info.funds, vec![order.clone().price])?;
     order.status = WaitingAddressUpload;
     order.shipper = info.sender;
     order.shipper_key = pub_key;
@@ -290,7 +290,7 @@ pub fn try_dispute_confirm(deps: DepsMut, info: MessageInfo, id: u32) -> Result<
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 //        QueryMsg::GetOrderDetail {id} => to_binary(&query_order_detail(deps, id)?),
 //        QueryMsg::GetAddresses {id} => to_binary(&query_addresses(deps, id)?),
     match msg {
@@ -299,6 +299,8 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::GetShippingFees {} => to_binary(&query_shipping_fees(deps)?),
 
         QueryMsg::GetAddresses {id} => to_binary(&query_address(deps, id)?),
+        QueryMsg::GetBalance {} => to_binary(&query_balance(deps, env)?),
+
     }
 }
 
@@ -344,6 +346,12 @@ pub fn query_address(deps: Deps, id: u32) -> StdResult<AddressesResponse> {
     //let buyer = order.buyer;
 
     Ok(AddressesResponse{buyer: buyer.into_string(), seller: seller.into_string()})
+}
+
+pub fn query_balance(deps: Deps, env: Env) -> StdResult<BalanceResponse> {
+    let balance = deps.querier.query_all_balances(env.contract.address).unwrap();
+
+    Ok(BalanceResponse{balance})
 }
 
 #[cfg(test)]
@@ -493,7 +501,7 @@ mod tests {
             id: 0,
             pub_key: String::from("rsa1")
         };
-        let info3 = mock_info("shipper1", &coins(20, "LUNA"));
+        let info3 = mock_info("shipper1", &coins(2000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info3, msg3).unwrap();
 
         let msg4 = ExecuteMsg::TakeOrder {
@@ -541,7 +549,7 @@ mod tests {
             id: 0,
             pub_key: String::from("fuck")
         };
-        let info3 = mock_info("shipper", &coins(20, "LUNA"));
+        let info3 = mock_info("shipper", &coins(2000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info3, msg3).unwrap();
 
         let msg4 = ExecuteMsg::UploadAddress {
@@ -591,7 +599,7 @@ mod tests {
             id: 0,
             pub_key: String::from("rsa1")
         };
-        let info3 = mock_info("shipper", &coins(20, "LUNA"));
+        let info3 = mock_info("shipper", &coins(2000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info3, msg3).unwrap();
 
         let msg4 = ExecuteMsg::UploadAddress {
@@ -647,7 +655,7 @@ mod tests {
             id: 0,
             pub_key: String::from("rsa1")
         };
-        let info3 = mock_info("shipper", &coins(20, "LUNA"));
+        let info3 = mock_info("shipper", &coins(2000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info3, msg3).unwrap();
 
         let msg4 = ExecuteMsg::UploadAddress {
@@ -675,5 +683,10 @@ mod tests {
         };
         let info7 = mock_info("seller", &coins(0, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info7, msg7).unwrap();
+
+        let msg8 = QueryMsg::GetBalance {};
+        let res = query(deps.as_ref(), mock_env(),  msg8).unwrap();
+        let value: BalanceResponse = from_binary(&res).unwrap();
+        println!("{:?}", value);
     }
 }
