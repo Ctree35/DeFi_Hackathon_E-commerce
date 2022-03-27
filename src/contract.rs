@@ -30,13 +30,23 @@ pub fn instantiate(
     _msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     let state = State {
-        balance: deps.querier.query_all_balances(env.contract.address).unwrap(),
         order_cnt: 0,
         owner: info.sender.clone(),
     };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     STATE.save(deps.storage, &state)?;
     // SHIPPING_FEE
+    let cities = vec!["Montreal", "Ottawa", "Toronto"];
+    for c1 in cities.iter() {
+        for c2 in cities.iter() {
+            if c1 == c2 {
+                SHIPPING_FEE_MATRIX.save(deps.storage, (c1, c2), &coin(5, "LUNA"))?;
+            }
+            else {
+                SHIPPING_FEE_MATRIX.save(deps.storage, (c1, c2), &coin(10, "LUNA"))?;
+            }
+        }
+    }
     Ok(Response::new()
         .add_attribute("method", "instantiate")
         .add_attribute("owner", info.sender))
@@ -97,7 +107,7 @@ pub fn try_buy(deps: DepsMut, info: MessageInfo, name: &str, area: &str) -> Resu
         goods: good.clone(),
         price: good.clone().price,
         buyer_address: String::from(area),
-        shipping_fee: Default::default(),
+        shipping_fee: SHIPPING_FEE_MATRIX.load(deps.storage, (&good.clone().area, area))?,
         shipper: Addr::unchecked("Dummy_Shipper"),
         shipper_key: Default::default(),
         buyer_addr_enc: Default::default(),

@@ -45,7 +45,7 @@ pub struct OrdersResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct ShippingFeesResponse {
-    pub shipping_fees: Vec<u32>,
+    pub shipping_fees: Vec<Coin>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
