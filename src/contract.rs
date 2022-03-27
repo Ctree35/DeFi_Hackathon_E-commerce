@@ -6,17 +6,18 @@ use cosmwasm_std::OverflowOperation::Add;
 use cosmwasm_std::{coin, coins};
 use cw2::set_contract_version;
 
-use crate::error::ContractError;
-use crate::msg::{AddressesResponse, BalanceResponse, ExecuteMsg, GoodsResponse, InstantiateMsg, OrderDetailResponse, OrdersResponse, QueryMsg, ShippingFeesResponse};
+use openssl::rsa::{Rsa, Padding};
 
-use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST, ORDER_LIST, SHIPPING_FEE_MATRIX, Order, OrderStatus, ShipperBid};
+use crate::error::ContractError;
+use crate::msg::{AddressesResponse, BalanceResponse, ExecuteMsg, GoodsResponse, InstantiateMsg, OrderDetailResponse, OrdersResponse, QueryMsg};
+
+use crate::state::{State, STATE, Goods, GoodsStatus, GOODS_LIST, ORDER_LIST, Order, OrderStatus, ShipperBid};
 use crate::helper::{assert_sent_sufficient_coin, merge_coin};
 // use serde::de::Unexpected::Map;
 use crate::state::GoodsStatus::{Available, Ordered, Returned, Sold};
 use cosmwasm_std::Order::Ascending;
 use crate::ContractError::Unauthorized;
 use crate::state::OrderStatus::{Bidding, Confirmed, Disputed, DisputingBroken, DisputingUnsatisfied, Setup, Shipping, WaitingAddressUpload};
-
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:defi_ecommerce";
@@ -35,18 +36,7 @@ pub fn instantiate(
     };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     STATE.save(deps.storage, &state)?;
-    // SHIPPING_FEE
-    let cities = vec!["Montreal", "Ottawa", "Toronto"];
-    for c1 in cities.iter() {
-        for c2 in cities.iter() {
-            if c1 == c2 {
-                SHIPPING_FEE_MATRIX.save(deps.storage, (c1, c2), &coin(5, "LUNA"))?;
-            }
-            else {
-                SHIPPING_FEE_MATRIX.save(deps.storage, (c1, c2), &coin(10, "LUNA"))?;
-            }
-        }
-    }
+
     Ok(Response::new()
         .add_attribute("method", "instantiate")
         .add_attribute("owner", info.sender))
@@ -109,7 +99,7 @@ pub fn try_buy(deps: DepsMut, info: MessageInfo, name: &str, buyer_area: &str) -
         price: good.clone().price,
         buyer_area: String::from(buyer_area),
         shipper_bids: vec![],
-        shipping_fee: SHIPPING_FEE_MATRIX.load(deps.storage, (&good.clone().seller_area, buyer_area))?,
+        shipping_fee: Default::default(),
         shipper: Addr::unchecked("Dummy_Shipper"),
         shipper_key: Default::default(),
         buyer_addr_enc: Default::default(),
@@ -178,6 +168,7 @@ pub fn try_choose_bid(deps: DepsMut, info: MessageInfo, id: u32, shipper: String
     }
     match order.shipper_bids.iter().find(|x| x.shipper == Addr::unchecked(shipper.clone())) {
         Some(x) => {
+            assert_sent_sufficient_coin(&info.funds, coins(x.price.clone().amount.checked_mul(Uint128::from(2u32)).unwrap().u128(), x.price.clone().denom));
             order.status = WaitingAddressUpload;
             order.shipper = x.shipper.clone();
             order.shipper_key = x.pub_key.clone();
@@ -198,7 +189,7 @@ pub fn try_choose_bid(deps: DepsMut, info: MessageInfo, id: u32, shipper: String
     }
 }
 
-pub fn try_upload_address(deps: DepsMut, info: MessageInfo, id: u32, address_enc: String) -> Result<Response, ContractError> {
+pub fn try_upload_address(deps: DepsMut, info: MessageInfo, id: u32, address_enc: Vec<u8>) -> Result<Response, ContractError> {
     let mut order = ORDER_LIST.load(deps.storage, &id.to_string())?;
     if order.status != WaitingAddressUpload {
         return Err(ContractError::OrderNotAvailable {});
@@ -212,7 +203,7 @@ pub fn try_upload_address(deps: DepsMut, info: MessageInfo, id: u32, address_enc
     else {
         return Err(ContractError::Unauthorized {});
     }
-    if order.buyer_addr_enc != String::default() && order.seller_addr_enc != String::default() {
+    if !order.buyer_addr_enc.is_empty() && !order.seller_addr_enc.is_empty() {
         order.status = Shipping;
     }
     let update_order = |d: Option<Order>| -> StdResult<Order> {
@@ -343,7 +334,6 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::GetGoods {} => to_binary(&query_goods(deps)?),
         QueryMsg::GetOrders {} => to_binary(&query_orders(deps)?),
-        QueryMsg::GetShippingFees {} => to_binary(&query_shipping_fees(deps)?),
         QueryMsg::GetOrderDetail {id} => to_binary(&query_order_detail(deps, id)?),
         QueryMsg::GetAddresses {id} => to_binary(&query_address(deps, id)?),
         QueryMsg::GetBalance {} => to_binary(&query_balance(deps, env)?),
@@ -368,13 +358,6 @@ pub fn query_orders(deps: Deps) -> StdResult<OrdersResponse> {
     Ok(OrdersResponse{orders: {orders}})
 }
 
-pub fn query_shipping_fees(deps: Deps) -> StdResult<ShippingFeesResponse> {
-    let shipping_fee_matrix: StdResult<Vec<_>> = SHIPPING_FEE_MATRIX.range(deps.storage, None, None, Ascending).collect();
-    let shipping_fee_matrix = shipping_fee_matrix.unwrap();
-    let shipping_fees = shipping_fee_matrix.iter().map(|x| x.1.clone()).collect();
-
-    Ok(ShippingFeesResponse{shipping_fees: {shipping_fees}})
-}
 
 pub fn query_order_detail(deps: Deps, id: u32) -> StdResult<OrderDetailResponse> {
     let order_list: StdResult<Vec<_>> = ORDER_LIST.range(deps.storage, None, None, Ascending).collect();
@@ -416,6 +399,7 @@ mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
     use cosmwasm_std::{coins, from_binary};
+
 
     #[test]
     fn test_post() {
@@ -577,7 +561,7 @@ mod tests {
             id: 0,
             shipper: String::from("shipper1")
         };
-        let info33 = mock_info("buyer", &coins(0, "LUNA"));
+        let info33 = mock_info("buyer", &coins(1000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info33, msg33).unwrap();
 
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetOrders {}).unwrap();
@@ -625,19 +609,19 @@ mod tests {
             id: 0,
             shipper: String::from("shipper")
         };
-        let info33 = mock_info("buyer", &coins(0, "LUNA"));
+        let info33 = mock_info("buyer", &coins(1000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info33, msg33).unwrap();
 
         let msg4 = ExecuteMsg::UploadAddress {
             id: 0,
-            address_enc: String::from("my address buyer")
+            address_enc: String::from("my address buyer").into_bytes()
         };
         let info4 = mock_info("buyer", &coins(0, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info4, msg4).unwrap();
 
         let msg5 = ExecuteMsg::UploadAddress {
             id: 0,
-            address_enc: String::from("my address seller")
+            address_enc: String::from("my address seller").into_bytes()
         };
         let info5 = mock_info("seller", &coins(0, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info5, msg5).unwrap();
@@ -683,19 +667,19 @@ mod tests {
             id: 0,
             shipper: String::from("shipper")
         };
-        let info33 = mock_info("buyer", &coins(0, "LUNA"));
+        let info33 = mock_info("buyer", &coins(1000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info33, msg33).unwrap();
 
         let msg4 = ExecuteMsg::UploadAddress {
             id: 0,
-            address_enc: String::from("my address")
+            address_enc: String::from("my address").into_bytes()
         };
         let info4 = mock_info("buyer", &coins(0, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info4, msg4).unwrap();
 
         let msg5 = ExecuteMsg::UploadAddress {
             id: 0,
-            address_enc: String::from("my address")
+            address_enc: String::from("my address").into_bytes()
         };
         let info5 = mock_info("seller", &coins(0, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info5, msg5).unwrap();
@@ -735,9 +719,17 @@ mod tests {
         let info2 = mock_info("buyer", &coins(2000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info2, msg2).unwrap();
 
+        let rsa = Rsa::generate(1024).unwrap();
+        let private_key1: Vec<u8> = rsa.private_key_to_pem().unwrap();
+        let public_key1: Vec<u8> = rsa.public_key_to_pem().unwrap();
+
+        let rsa2 = Rsa::generate(1024).unwrap();
+        let private_key2: Vec<u8> = rsa2.private_key_to_pem().unwrap();
+        let public_key2: Vec<u8> = rsa2.public_key_to_pem().unwrap();
+
         let msg31 = ExecuteMsg::TakeOrder {
             id: 0,
-            pub_key: String::from("rsa1"),
+            pub_key: String::from_utf8(public_key1.clone()).unwrap(),
             price: coin(10, "LUNA")
         };
         let info31 = mock_info("shipper1", &coins(2000, "LUNA"));
@@ -745,7 +737,7 @@ mod tests {
 
         let msg32 = ExecuteMsg::TakeOrder {
             id: 0,
-            pub_key: String::from("rsa1"),
+            pub_key: String::from_utf8(public_key2.clone()).unwrap(),
             price: coin(8, "LUNA")
         };
         let info32 = mock_info("shipper2", &coins(2000, "LUNA"));
@@ -755,22 +747,54 @@ mod tests {
             id: 0,
             shipper: String::from("shipper1")
         };
-        let info33 = mock_info("buyer", &coins(0, "LUNA"));
+        let info33 = mock_info("buyer", &coins(1000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info33, msg33).unwrap();
 
+        let buyer_address = "Ottawa University";
+        let msg_query = QueryMsg::GetOrderDetail {
+            id: 0
+        };
+        let res = query(deps.as_ref(), mock_env(),msg_query).unwrap();
+        let order: OrderDetailResponse = from_binary(&res).unwrap();
+        let shipper_key = order.order.shipper_key;
+        let rsa = Rsa::public_key_from_pem(shipper_key.as_bytes()).unwrap();
+        let mut buyer_addr_enc: Vec<u8> = vec![0; rsa.size() as usize];
+        let _ = rsa.public_encrypt(buyer_address.as_bytes(), &mut buyer_addr_enc, Padding::PKCS1).unwrap();
         let msg4 = ExecuteMsg::UploadAddress {
             id: 0,
-            address_enc: String::from("my address")
+            address_enc: buyer_addr_enc
         };
         let info4 = mock_info("buyer", &coins(0, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info4, msg4).unwrap();
 
+        let seller_address = "McGill University";
+        let mut seller_addr_enc: Vec<u8> = vec![0; rsa.size() as usize];
+        let _ = rsa.public_encrypt(seller_address.as_bytes(), &mut seller_addr_enc, Padding::PKCS1).unwrap();
         let msg5 = ExecuteMsg::UploadAddress {
             id: 0,
-            address_enc: String::from("my address")
+            address_enc: seller_addr_enc
         };
         let info5 = mock_info("seller", &coins(0, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info5, msg5).unwrap();
+
+        let msg_query = QueryMsg::GetOrderDetail {
+            id: 0
+        };
+        let res = query(deps.as_ref(), mock_env(),msg_query).unwrap();
+        let order: OrderDetailResponse = from_binary(&res).unwrap();
+        let rsa = Rsa::private_key_from_pem(&private_key1).unwrap();
+        let mut buyer_addr: Vec<u8> = vec![0; rsa.size() as usize];
+        let mut seller_addr: Vec<u8> = vec![0; rsa.size() as usize];
+        let _ = rsa.private_decrypt(&order.order.buyer_addr_enc, &mut buyer_addr, Padding::PKCS1).unwrap();
+        let _ = rsa.private_decrypt(&order.order.seller_addr_enc, &mut seller_addr, Padding::PKCS1).unwrap();
+
+        let mut buyer_addr_dec = String::from_utf8(buyer_addr).unwrap();
+        let mut seller_addr_dec = String::from_utf8(seller_addr).unwrap();
+        buyer_addr_dec.truncate(buyer_address.len());
+        seller_addr_dec.truncate(seller_address.len());
+
+        assert_eq!(buyer_addr_dec, buyer_address);
+        assert_eq!(seller_addr_dec, seller_address);
 
         let msg6 = ExecuteMsg::DisputeUnsatisfied {
             id: 0,

@@ -15,7 +15,7 @@ pub enum ExecuteMsg {
     Reset { name: String, price: u32 },
     TakeOrder {id: u32, pub_key: String, price: Coin},
     ChooseBid {id: u32, shipper: String},
-    UploadAddress {id: u32, address_enc: String},
+    UploadAddress {id: u32, address_enc: Vec<u8>},
     Confirm {id: u32},
     DisputeBroken {id: u32},
     DisputeUnsatisfied {id: u32},
@@ -27,7 +27,6 @@ pub enum ExecuteMsg {
 pub enum QueryMsg {
     GetGoods {},
     GetOrders {},
-    GetShippingFees {},
     GetOrderDetail {id: u32},
     GetAddresses {id: u32},
     GetBalance {}
@@ -42,11 +41,6 @@ pub struct GoodsResponse {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct OrdersResponse {
     pub orders: Vec<Order>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct ShippingFeesResponse {
-    pub shipping_fees: Vec<Coin>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

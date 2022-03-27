@@ -32,8 +32,8 @@ pub struct Order {
     pub shipping_fee: Coin,
     pub shipper: Addr,
     pub shipper_key: String,
-    pub buyer_addr_enc: String,
-    pub seller_addr_enc: String,
+    pub buyer_addr_enc: Vec<u8>,
+    pub seller_addr_enc: Vec<u8>,
     pub status: OrderStatus
 }
 
@@ -71,4 +71,3 @@ pub enum OrderStatus {
 pub const STATE: Item<State> = Item::new("state");
 pub const GOODS_LIST: Map<&str, Goods> = Map::new("goods_list");
 pub const ORDER_LIST: Map<&str, Order> = Map::new("order_list");
-pub const SHIPPING_FEE_MATRIX: Map<(&str, &str), Coin> = Map::new("shipping_fee_matrix");
