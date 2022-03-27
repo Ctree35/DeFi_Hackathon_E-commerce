@@ -393,15 +393,16 @@ pub fn query_address(deps: Deps, id: u32) -> StdResult<AddressesResponse> {
     let order_list = order_list.unwrap();
     let order = order_list.iter().find(|&x| String::from_utf8(x.clone().0).unwrap() == id.to_string());
     let buyer = match order {
-        Some((_, o)) => o.clone().buyer,
+        Some((_, o)) => o.clone().buyer_addr_enc,
         None => unimplemented!()
     };
     let seller = match order {
-        Some((_, o)) => o.clone().seller,
+        Some((_, o)) => o.clone().seller_addr_enc,
         None => unimplemented!()
     };
 
-    Ok(AddressesResponse{buyer: buyer.into_string(), seller: seller.into_string()})
+    //Ok(AddressesResponse{buyer: buyer.into_string(), seller: seller.into_string()})
+    Ok(AddressesResponse{buyer: buyer, seller: seller})
 }
 
 pub fn query_balance(deps: Deps, env: Env) -> StdResult<BalanceResponse> {
@@ -641,6 +642,10 @@ mod tests {
         };
         let info5 = mock_info("seller", &coins(0, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info5, msg5).unwrap();
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetAddresses {id: 0u32}).unwrap();
+        let value: AddressesResponse = from_binary(&res).unwrap();
+        println!("{:?}", value);
     }
 
     #[test]
