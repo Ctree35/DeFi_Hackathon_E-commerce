@@ -6,7 +6,8 @@ use cosmwasm_std::OverflowOperation::Add;
 use cosmwasm_std::{coin, coins};
 use cw2::set_contract_version;
 
-use openssl::rsa::{Rsa, Padding};
+use rsa::{PublicKey, RsaPrivateKey, PaddingScheme};
+use rand::rngs::OsRng;
 
 use crate::error::ContractError;
 use crate::msg::{AddressesResponse, BalanceResponse, ExecuteMsg, GoodsResponse, InstantiateMsg, OrderDetailResponse, OrdersResponse, QueryMsg};
@@ -26,7 +27,7 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
     _msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
@@ -400,6 +401,8 @@ mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
     use cosmwasm_std::{coins, from_binary};
+    use rsa::pkcs8::{FromPublicKey, ToPublicKey};
+    use rsa::RsaPublicKey;
 
 
     #[test]
@@ -734,17 +737,17 @@ mod tests {
         let info2 = mock_info("buyer", &coins(2000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info2, msg2).unwrap();
 
-        let rsa = Rsa::generate(1024).unwrap();
-        let private_key1: Vec<u8> = rsa.private_key_to_pem().unwrap();
-        let public_key1: Vec<u8> = rsa.public_key_to_pem().unwrap();
+        let mut rng = OsRng;
+        let bits = 1024;
+        let private_key1 = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate a key");
+        let public_key1 = RsaPublicKey::from(&private_key1);
 
-        let rsa2 = Rsa::generate(1024).unwrap();
-        let private_key2: Vec<u8> = rsa2.private_key_to_pem().unwrap();
-        let public_key2: Vec<u8> = rsa2.public_key_to_pem().unwrap();
+        let private_key2 = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate a key");
+        let public_key2 = RsaPublicKey::from(&private_key2);
 
         let msg31 = ExecuteMsg::TakeOrder {
             id: 0,
-            pub_key: String::from_utf8(public_key1.clone()).unwrap(),
+            pub_key: public_key1.clone().to_public_key_pem().unwrap(),
             price: coin(10, "LUNA")
         };
         let info31 = mock_info("shipper1", &coins(2000, "LUNA"));
@@ -752,7 +755,7 @@ mod tests {
 
         let msg32 = ExecuteMsg::TakeOrder {
             id: 0,
-            pub_key: String::from_utf8(public_key2.clone()).unwrap(),
+            pub_key: public_key2.clone().to_public_key_pem().unwrap(),
             price: coin(8, "LUNA")
         };
         let info32 = mock_info("shipper2", &coins(2000, "LUNA"));
@@ -772,9 +775,9 @@ mod tests {
         let res = query(deps.as_ref(), mock_env(),msg_query).unwrap();
         let order: OrderDetailResponse = from_binary(&res).unwrap();
         let shipper_key = order.order.shipper_key;
-        let rsa = Rsa::public_key_from_pem(shipper_key.as_bytes()).unwrap();
-        let mut buyer_addr_enc: Vec<u8> = vec![0; rsa.size() as usize];
-        let _ = rsa.public_encrypt(buyer_address.as_bytes(), &mut buyer_addr_enc, Padding::PKCS1).unwrap();
+
+        let pub_key = RsaPublicKey::from_public_key_pem(&shipper_key).unwrap();
+        let buyer_addr_enc= pub_key.encrypt(&mut rng, PaddingScheme::new_pkcs1v15_encrypt(), buyer_address.as_bytes()).expect("failed to encrypt");
         let msg4 = ExecuteMsg::UploadAddress {
             id: 0,
             address_enc: buyer_addr_enc
@@ -783,8 +786,8 @@ mod tests {
         let _res = execute(deps.as_mut(), mock_env(), info4, msg4).unwrap();
 
         let seller_address = "McGill University";
-        let mut seller_addr_enc: Vec<u8> = vec![0; rsa.size() as usize];
-        let _ = rsa.public_encrypt(seller_address.as_bytes(), &mut seller_addr_enc, Padding::PKCS1).unwrap();
+        let seller_addr_enc= pub_key.encrypt(&mut rng, PaddingScheme::new_pkcs1v15_encrypt(), seller_address.as_bytes()).expect("failed to encrypt");
+
         let msg5 = ExecuteMsg::UploadAddress {
             id: 0,
             address_enc: seller_addr_enc
@@ -797,11 +800,9 @@ mod tests {
         };
         let res = query(deps.as_ref(), mock_env(),msg_query).unwrap();
         let order: OrderDetailResponse = from_binary(&res).unwrap();
-        let rsa = Rsa::private_key_from_pem(&private_key1).unwrap();
-        let mut buyer_addr: Vec<u8> = vec![0; rsa.size() as usize];
-        let mut seller_addr: Vec<u8> = vec![0; rsa.size() as usize];
-        let _ = rsa.private_decrypt(&order.order.buyer_addr_enc, &mut buyer_addr, Padding::PKCS1).unwrap();
-        let _ = rsa.private_decrypt(&order.order.seller_addr_enc, &mut seller_addr, Padding::PKCS1).unwrap();
+
+        let buyer_addr = private_key1.decrypt(PaddingScheme::new_pkcs1v15_encrypt(), &order.order.buyer_addr_enc).expect("failed to decrypt");
+        let seller_addr = private_key1.decrypt(PaddingScheme::new_pkcs1v15_encrypt(), &order.order.seller_addr_enc).expect("failed to decrypt");
 
         let mut buyer_addr_dec = String::from_utf8(buyer_addr).unwrap();
         let mut seller_addr_dec = String::from_utf8(seller_addr).unwrap();

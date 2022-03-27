@@ -1,1 +1,1 @@
-13d1fe4c49e81caf452dc47ebe0f2eb4f4d55a678cfd013ea5f9df69c1c1d10a  ./target/wasm32-unknown-unknown/release/shuhao_test.wasm
+f106ddb850cc7d0a84972c254f48ee4b77c5859f76573798c824cec667f1d6db  ./target/wasm32-unknown-unknown/release/DeFi_Hackathon_Picnic.wasm
