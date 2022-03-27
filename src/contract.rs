@@ -376,15 +376,16 @@ pub fn query_address(deps: Deps, id: u32) -> StdResult<AddressesResponse> {
     let order_list = order_list.unwrap();
     let order = order_list.iter().find(|&x| String::from_utf8(x.clone().0).unwrap() == id.to_string());
     let buyer = match order {
-        Some((_, o)) => o.clone().buyer,
+        Some((_, o)) => o.clone().buyer_addr_enc,
         None => unimplemented!()
     };
     let seller = match order {
-        Some((_, o)) => o.clone().seller,
+        Some((_, o)) => o.clone().seller_addr_enc,
         None => unimplemented!()
     };
 
-    Ok(AddressesResponse{buyer: buyer.into_string(), seller: seller.into_string()})
+    //Ok(AddressesResponse{buyer: buyer.into_string(), seller: seller.into_string()})
+    Ok(AddressesResponse{buyer: buyer, seller: seller})
 }
 
 pub fn query_balance(deps: Deps, env: Env) -> StdResult<BalanceResponse> {
@@ -552,7 +553,7 @@ mod tests {
         let msg4 = ExecuteMsg::TakeOrder {
             id: 0,
             pub_key: String::from("rsa2"),
-            price: coin(10, "LUNA")
+            price: coin(11, "LUNA")
         };
         let info4 = mock_info("shipper2", &coins(5000, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info4, msg4).unwrap();
@@ -565,8 +566,16 @@ mod tests {
         let _res = execute(deps.as_mut(), mock_env(), info33, msg33).unwrap();
 
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetOrders {}).unwrap();
-        let value: OrdersResponse = from_binary(&res).unwrap();
-        println!("{:?}", value);
+        let value_all: OrdersResponse = from_binary(&res).unwrap();
+        println!("{:?}", value_all);
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetOrderDetail {id: 0u32}).unwrap();
+        let value_order_0: OrderDetailResponse = from_binary(&res).unwrap();
+        println!("{:?}", value_order_0);
+
+        assert_eq!(value_all.orders[0], value_order_0.order)
+
+
     }
 
     #[test]
@@ -625,6 +634,12 @@ mod tests {
         };
         let info5 = mock_info("seller", &coins(0, "LUNA"));
         let _res = execute(deps.as_mut(), mock_env(), info5, msg5).unwrap();
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetAddresses {id: 0u32}).unwrap();
+        let value: AddressesResponse = from_binary(&res).unwrap();
+        println!("{:?}", value);
+
+
     }
 
     #[test]
